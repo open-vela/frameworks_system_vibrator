@@ -19,17 +19,14 @@
  ****************************************************************************/
 
 #include <fcntl.h>
+#include <kvdb.h>
 #include <mqueue.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
 
 #include <log/log.h>
 #include <nuttx/motor/motor.h>
-#ifdef CONFIG_MOTOR_AW86225
-#include <nuttx/motor/aw86225.h>
-#endif
 #include <sys/ioctl.h>
 
 #include "vibrator_api.h"
@@ -43,9 +40,6 @@
 #define MAX_VIBRATION_STRENGTH_LEVEL (100)
 
 #define DBG(format, args...) SLOGD(format, ##args)
-
-extern int property_get(FAR const char* key, FAR char* value,
-                        FAR const char* default_value);
 
 /****************************************************************************
  * Private Functions
@@ -61,29 +55,34 @@ extern int property_get(FAR const char* key, FAR char* value,
  *   fd - driver file descriptors
  *   params - vibrator waveform
  *
+ * Returned Value:
+ *   return the ret of ioctl
+ *
  ****************************************************************************/
 
-static void vibrate_driver_run_waveform(int fd,
-                                        FAR struct motor_params_s* params)
+static int vibrate_driver_run_waveform(int fd,
+                                       FAR struct motor_params_s* params)
 {
-    int ret = -1;
+    int ret;
 
     ret = ioctl(fd, MTRIOC_SET_MODE, MOTOR_OPMODE_PATTERN);
     if (ret < 0) {
-        DBG("failed to set mode.");
-        return;
+        DBG("failed to set mode. errno = %d", errno);
+        return ret;
     }
 
     ret = ioctl(fd, MTRIOC_SET_PARAMS, params);
     if (ret < 0) {
-        DBG("failed to set params.");
-        return;
+        DBG("failed to set params. errno = %d", errno);
+        return ret;
     }
 
     ret = ioctl(fd, MTRIOC_START);
     if (ret < 0) {
-        DBG("failed to start vibrator.");
+        DBG("failed to start vibrator. errno = %d", errno);
     }
+
+    return ret;
 }
 
 /****************************************************************************
@@ -95,17 +94,20 @@ static void vibrate_driver_run_waveform(int fd,
  * Input Parameters:
  *   fd - the file of description
  *
+ * Returned Value:
+ *   return stop ioctl value
  ****************************************************************************/
 
-static void vibrate_driver_stop(int fd)
+static int vibrate_driver_stop(int fd)
 {
-    if (fd < 0) {
-        return;
-    }
-    int ret = ioctl(fd, MTRIOC_STOP);
+    int ret;
+
+    ret = ioctl(fd, MTRIOC_STOP);
     if (ret < 0) {
         DBG("failed to stop vibrator");
     }
+
+    return ret;
 }
 
 /****************************************************************************
@@ -118,24 +120,24 @@ static void vibrate_driver_stop(int fd)
  *   data - the waveform of the compositions array
  *   fd - the file of description
  *
+ * Returned Value:
+ *   return the run waveform value
+ *
  ****************************************************************************/
 
-static void receive_compositions(compositions_t data, int fd)
+static int receive_compositions(compositions_t data, int fd)
 {
-    vibrate_driver_stop(fd);
-
-#ifdef CONFIG_MOTOR_AW86225
-    FAR struct aw86225_patterns_s* patterns = (FAR void*)&data;
-
-    struct motor_params_s params = {
-        .privdata = patterns,
-    };
-#else
+    int ret;
     struct motor_params_s params = {
         .privdata = &data,
     };
-#endif
-    vibrate_driver_run_waveform(fd, &params);
+
+    ret = vibrate_driver_stop(fd);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return vibrate_driver_run_waveform(fd, &params);
 }
 
 /****************************************************************************
@@ -148,15 +150,24 @@ static void receive_compositions(compositions_t data, int fd)
  *   wave - the waveform of the waveform_t array
  *   fd - the file of description
  *
+ * Returned Value:
+ *   return the run waveform value
+ *
  ****************************************************************************/
 
-static void receive_waveform(waveform_t wave, int fd)
+static int receive_waveform(waveform_t wave, int fd)
 {
-    vibrate_driver_stop(fd);
+    int ret;
     struct motor_params_s params = {
         .privdata = &wave,
     };
-    vibrate_driver_run_waveform(fd, &params);
+
+    ret = vibrate_driver_stop(fd);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return vibrate_driver_run_waveform(fd, &params);
 }
 
 /****************************************************************************
@@ -169,15 +180,24 @@ static void receive_waveform(waveform_t wave, int fd)
  *   effectid - the wave id
  *   fd - the file of description
  *
+ * Returned Value:
+ *   return the run waveform value
+ *
  ****************************************************************************/
 
-static void receive_predefined(int effectid, int fd)
+static int receive_predefined(int effectid, int fd)
 {
-    vibrate_driver_stop(fd);
+    int ret;
     struct motor_params_s params = {
         .privdata = &effectid,
     };
-    vibrate_driver_run_waveform(fd, &params);
+
+    ret = vibrate_driver_stop(fd);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return vibrate_driver_run_waveform(fd, &params);
 }
 
 /****************************************************************************
@@ -186,15 +206,23 @@ static void receive_predefined(int effectid, int fd)
  * Description:
  *   calibrate of the vibrator
  *
- * Input Parameters:
- *   fd - the file of description
+ * Returned Value:
+ *   return file descriptor
  *
  ****************************************************************************/
 
-static void vibrator_cali(int fd)
+static int vibrator_init(void)
 {
-    int ret = -1;
+    int fd;
+    int ret;
     static char calibrate_value[32];
+
+
+    fd = open(VIBRATOR_DEV_FS, O_CLOEXEC | O_RDWR);
+    if (fd < 0) {
+        DBG("vibrator open failed, errno = %d", errno);
+        return fd;
+    }
 
     struct motor_limits_s limits = {
         .force = MAX_VIBRATION_STRENGTH_LEVEL / 100.0f,
@@ -202,78 +230,75 @@ static void vibrator_cali(int fd)
 
     ret = ioctl(fd, MTRIOC_SET_LIMITS, &limits);
     if (ret < 0) {
-        DBG("failed to motor limits");
-        return;
+        DBG("failed to motor limits, errno = %d", errno);
     }
 
     ret = property_get(MOTO_CALI_PREFIX, calibrate_value, "");
-    if (strlen(calibrate_value) == 0) {
-        DBG("calibrate value get failed\n");
-        return;
+    if (ret > 0) {
+        if (strlen(calibrate_value) == 0) {
+            DBG("calibrate value get failed, errno = %d", errno);
+        }
+
+        ret = ioctl(fd, MTRIOC_SET_CALIBDATA, calibrate_value);
+        if (ret < 0) {
+            DBG("ioctl failed %d!", ret);
+        }
     }
 
-    ret = ioctl(fd, MTRIOC_SET_CALIBDATA, calibrate_value);
-    if (ret < 0) {
-        DBG("ioctl failed %d!", ret);
-        return;
-    }
+    return fd;
 }
 
 int main(int argc, FAR char* argv[])
 {
-    int vib;
+    int fd;
+    int ret;
     mqd_t mq;
-    uint8_t effectid;
-    uint8_t buffer[512];
-    bool loop = true;
-    waveform_t wave;
-    int var;
-    compositions_t received_data;
-
-    var = open(VIBRATOR_DEV_FS, O_CLOEXEC | O_RDWR);
-    if (var < 0) {
-        DBG("vibrator open failed");
-        return 0;
-    }
-
-    vibrator_cali(var);
-
+    vibrator_t vibra_t;
     struct mq_attr attr;
-    attr.mq_maxmsg = 10;
-    attr.mq_msgsize = sizeof(buffer);
+
+    attr.mq_maxmsg = MAX_MSG_NUM;
+    attr.mq_msgsize = MAX_MSG_SIZE;
+
+    fd = vibrator_init();
+    if (fd < 0) {
+        return fd;
+    }
 
     mq = mq_open(QUEUE_NAME, O_CREAT | O_RDONLY, 0660, &attr);
     if (mq == (mqd_t)-1) {
         DBG("mq_open fail");
-        return 0;
+        close(fd);
+        return mq;
     }
 
-    while (loop) {
-        memset(buffer, 0, sizeof(buffer));
-        if (mq_receive(mq, (char*)buffer, sizeof(buffer), NULL) == -1) {
+    while (1) {
+        memset(&vibra_t, 0, sizeof(vibrator_t));
+        if (mq_receive(mq, (char*)&vibra_t, MAX_MSG_SIZE, NULL) == -1) {
             DBG("mq_receive");
+            close(fd);
+            mq_close(mq);
             return 0;
         }
 
-        vib = buffer[0];
-        switch (vib) {
+        switch (vibra_t.type) {
         case VIBRATION_WAVEFORM: {
-            memcpy(&wave, buffer + 4, sizeof(waveform_t));
-            receive_waveform(wave, var);
+            ret = receive_waveform(vibra_t.wave, fd);
+            DBG("receive_waveform ret = %d", ret);
             break;
         }
         case VIBRATION_EFFECT: {
-            memcpy(&effectid, buffer + 4, sizeof(uint8_t));
-            receive_predefined(effectid, var);
+            ret = receive_predefined(vibra_t.effectid, fd);
+            DBG("receive_predefined ret = %d", ret);
             break;
         }
         case VIBRATION_COMPOSITION: {
-            memcpy(&received_data, buffer + 4, sizeof(compositions_t));
-            receive_compositions(received_data, var);
+            ret = receive_compositions(vibra_t.comp, fd);
+            DBG("receive_compositions ret = %d", ret);
             break;
         }
         case VIBRATION_STOP: {
-            vibrate_driver_stop(var);
+            ret = vibrate_driver_stop(fd);
+            DBG("vibrate driver stop ret = %d", ret);
             break;
         }
         default: {
@@ -282,6 +307,7 @@ int main(int argc, FAR char* argv[])
         }
     }
 
+    close(fd);
     mq_close(mq);
-    return 0;
+    return ret;
 }
