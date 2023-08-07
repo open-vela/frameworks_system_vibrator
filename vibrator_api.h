@@ -63,25 +63,6 @@ enum {
     VIBRATION_STOP = 4
 };
 
-enum {
-    VIBRATION_TYPE_NONE,
-    VIBRATION_TYPE_CROWN,
-    VIBRATION_TYPE_KEY_BOARD,
-    VIBRATION_TYPE_WATCH_FACE,
-    VIBRATION_TYPE_SUCCESS,
-    VIBRATION_TYPE_FAILED,
-    VIBRATION_TYPE_SYSTEM_OPRATION,
-    VIBRATION_TYPE_HEALTH_ALERT,
-    VIBRATION_TYPE_SYSTEM_EVENT,
-    VIBRATION_TYPE_NOTIFICATION,
-    VIBRATION_TYPE_TARGET_DONE,
-    VIBRATION_TYPE_BREATHING_TRAINING,
-    VIBRATION_TYPE_INCOMING_CALL,
-    VIBRATION_TYPE_CLOCK_ALARM,
-    VIBRATION_TYPE_SLEEP_ALARM,
-    VIBRATION_TYPE_COUNT,
-};
-
 /* struct waveform
  * @repeat: indicates the location of the start of the array vibration
  * @length: the length of arrays timings and amplitudes
@@ -124,20 +105,41 @@ typedef struct {
     composition_t pattern[5];
 } compositions_t;
 
+/* struct vibrator_t
+ * @type: vibrator of type
+ * @effectid: the number of effect vibrator
+ * @wave: the waveform_t of above structure
+ * @comp: the compositions_t of above structure
+ */
+
+typedef struct {
+    uint8_t type;
+    union {
+        uint8_t effectid;
+        waveform_t wave;
+        compositions_t comp;
+    };
+} vibrator_t;
+
 /****************************************************************************
- * Name: create_compositions()
+ * Name: vibrator_create_compositions()
  *
  * Description:
  *   create the compositions interface for app
  *
  * Input Parameters:
- *   var_id - the subscript of the data array
+ *   data - the compositions_t of data
+ *
+ * Returned Value:
+ *   returns the flag that the vibration is enabled, greater than or equal
+ *   to 0 means success, otherwise it means failure
+ *
  ****************************************************************************/
 
-uint8_t create_compositions(uint8_t var_id);
+uint8_t vibrator_create_compositions(compositions_t data);
 
 /****************************************************************************
- * Name: create_waveform()
+ * Name: vibrator_create_waveform()
  *
  * Description:
  *    create waveform vibration effects
@@ -150,13 +152,17 @@ uint8_t create_compositions(uint8_t var_id);
  *   repeat - repeat is the subscript that indicates the start of
  *   the vibration
  *
+ * Returned Value:
+ *   returns the flag that the vibration is enabled, greater than or equal
+ *   to 0 means success, otherwise it means failure
+ *
  ****************************************************************************/
 
-uint8_t create_waveform(uint32_t timing[], uint8_t amplitudes[],
-                        uint8_t repeat, u_int8_t length);
+uint8_t vibrator_create_waveform(uint32_t timing[], uint8_t amplitudes[],
+                                 uint8_t repeat, u_int8_t length);
 
 /****************************************************************************
- * Name: create_oneshot()
+ * Name: vibrator_create_oneshot()
  *
  * Description:
  *    create waveform vibration effects
@@ -165,12 +171,16 @@ uint8_t create_waveform(uint32_t timing[], uint8_t amplitudes[],
  *   timing - duration of vibration
  *   amplitude - amplitude of vibration
  *
+ * Returned Value:
+ *   returns the flag that the vibration is enabled, greater than or equal
+ *   to 0 means success, otherwise it means failure
+ *
  ****************************************************************************/
 
-uint8_t create_oneshot(uint32_t timing, uint8_t amplitude);
+uint8_t vibrator_create_oneshot(uint32_t timing, uint8_t amplitude);
 
 /****************************************************************************
- * Name: create_predefined()
+ * Name: vibrator_create_predefined()
  *
  * Devoidscription:
  *    create the predefined interface for app
@@ -178,9 +188,13 @@ uint8_t create_oneshot(uint32_t timing, uint8_t amplitude);
  * Input Parameters:
  *   effectid - effectid of vibrator
  *
+ * Returned Value:
+ *   returns the flag that the vibration is enabled, greater than or equal
+ *   to 0 means success, otherwise it means failure
+ *
  ****************************************************************************/
 
-uint8_t create_predefined(uint8_t effectid);
+uint8_t vibrator_create_predefined(uint8_t effectid);
 
 /****************************************************************************
  * Name: vibrator_cancel()
@@ -191,8 +205,12 @@ uint8_t create_predefined(uint8_t effectid);
  * Input Parameters:
  *   vibration_id - vibration_id of vibrator
  *
+ * Returned Value:
+ *   returns the flag that the vibration is closed, greater than or equal
+ *   to 0 means success, otherwise it means failure
+ *
  ****************************************************************************/
 
-void vibrator_cancel(uint8_t vibration_id);
+int vibrator_cancel(uint8_t vibration_id);
 
 #endif /* #define __INCLUDE_NUTTX_VIBRATOR_API_H */
