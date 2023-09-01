@@ -21,13 +21,17 @@
 #include <fcntl.h>
 #include <kvdb.h>
 #include <mqueue.h>
+#include <poll.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <log/log.h>
+#include <netpacket/rpmsg.h>
 #include <nuttx/motor/motor.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 
 #include "vibrator_api.h"
 
@@ -40,6 +44,14 @@
 #define MAX_VIBRATION_STRENGTH_LEVEL (100)
 
 #define DBG(format, args...) SLOGD(format, ##args)
+
+typedef struct {
+    int fd;
+    bool forcestop;
+    waveform_t wave;
+    pthread_mutex_t mutex;
+    pthread_cond_t condition;
+} threadargs;
 
 /****************************************************************************
  * Private Functions
@@ -96,6 +108,7 @@ static int vibrate_driver_run_waveform(int fd,
  *
  * Returned Value:
  *   return stop ioctl value
+ *
  ****************************************************************************/
 
 static int vibrate_driver_stop(int fd)
@@ -141,33 +154,236 @@ static int receive_compositions(compositions_t data, int fd)
 }
 
 /****************************************************************************
+ * Name: do_vibrator_set_amplitude()
+ *
+ * Description:
+ *   operate the driver's interface, just retain the interface
+ *
+ * Input Parameters:
+ *   fd - the file of description
+ *   amplitude - amplitude of the vibrator
+ *
+ ****************************************************************************/
+
+void do_vibrator_set_amplitude(int fd, uint8_t amplitude)
+{
+    // ioctl(fd, amplitude);
+}
+
+/****************************************************************************
+ * Name: do_vibrator_on()
+ *
+ * Description:
+ *   operate the driver's interface, just retain the interface
+ *
+ * Input Parameters:
+ *   fd - the file of description
+ *   on_duration - motor on duration
+ *   amplitude - amplitude of the vibrator
+ *
+ ****************************************************************************/
+
+void do_vibrator_on(int fd, uint32_t on_duration, uint8_t amplitude)
+{
+    // ioctl(fd, on_duration);
+    do_vibrator_set_amplitude(fd, amplitude);
+}
+
+/****************************************************************************
+ * Name: get_total_on_duration()
+ *
+ * Description:
+ *   calculate the time when the continuous amplitude value of
+ *   the elements in the array is not 0
+ *
+ * Input Parameters:
+ *   timings - motor vibration time
+ *   amplitudes - motor of amplitudes
+ *   start_index - starting subscript
+ *   repeat_index - cyclic repeat subscript
+ *   len - length of timings and amplitudes array
+ *
+ * Returned Value:
+ *   return the on_duration time
+ *
+ ****************************************************************************/
+
+int32_t get_total_on_duration(uint32_t timings[], uint8_t amplitudes[],
+                              uint8_t start_index, uint8_t repeat_index,
+                              uint8_t len)
+{
+    uint8_t i;
+    uint32_t timing;
+
+    timing = 0;
+    i = start_index;
+
+    while (amplitudes[i] != 0) {
+        timing += timings[i++];
+        if (i >= len) {
+            if (repeat_index >= 0) {
+                i = repeat_index;
+                repeat_index = -1;
+            } else {
+                break;
+            }
+        }
+        if (i == start_index) {
+            return 1000;
+        }
+    }
+    return timing;
+}
+
+/****************************************************************************
+ * Name: custom_wait()
+ *
+ * Description:
+ *   used to wait for a given time interval
+ *
+ * Input Parameters:
+ *   milliseconds - milliseconds to wait
+ *
+ ****************************************************************************/
+
+void custom_wait(uint32_t milliseconds)
+{
+    struct timespec ts;
+    ts.tv_sec = milliseconds / 1000;
+    ts.tv_nsec = (milliseconds % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+}
+
+/****************************************************************************
+ * Name: time_millis()
+ *
+ * Description:
+ *   get the current time in milliseconds
+ *
+ * Returned Value:
+ *   return the current time in milliseconds
+ *
+ ****************************************************************************/
+
+uint32_t time_millis(void)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return now.tv_sec * 1000 + now.tv_nsec / 1000000;
+}
+
+/****************************************************************************
+ * Name: delay_locked()
+ *
+ * Description:
+ *   blocks program execution for a period of time
+ *
+ * Input Parameters:
+ *   forcestop - motor vibration time
+ *   duration - blocks program execution for a period of time
+ *
+ * Returned Value:
+ *   returns the actual waiting time
+ *
+ ****************************************************************************/
+
+uint32_t delay_locked(bool forcestop, uint32_t duration)
+{
+    uint32_t duration_remaining = duration;
+
+    if (duration > 0) {
+        uint32_t bedtime = duration + time_millis();
+        do {
+            custom_wait(duration_remaining);
+            if (forcestop) {
+                break;
+            }
+            duration_remaining = bedtime - time_millis();
+        } while (duration_remaining > 0);
+
+        return duration - duration_remaining;
+    }
+
+    return 0;
+}
+
+/****************************************************************************
  * Name: receive_waveform()
  *
  * Description:
  *   receive waveform from vibrator_upper file
  *
  * Input Parameters:
- *   wave - the waveform of the waveform_t array
- *   fd - the file of description
- *
- * Returned Value:
- *   return the run waveform value
+ *   args - the args of threadargs
  *
  ****************************************************************************/
 
-static int receive_waveform(waveform_t wave, int fd)
+static void* receive_waveform(void* args)
 {
-    int ret;
-    struct motor_params_s params = {
-        .privdata = &wave,
-    };
+    int fd;
+    int index;
+    bool forcestop;
+    waveform_t wave;
+    uint8_t amplitude;
+    uint32_t duration;
+    uint32_t wait_time;
+    uint32_t on_duration;
+    threadargs* thread_args;
 
-    ret = vibrate_driver_stop(fd);
-    if (ret < 0) {
-        return ret;
+    thread_args = (threadargs*)args;
+    fd = thread_args->fd;
+    wave = thread_args->wave;
+
+    uint32_t timings[wave.length];
+    uint8_t amplitudes[wave.length];
+
+    index = 0;
+    duration = 0;
+    amplitude = 0;
+    on_duration = 0;
+
+    for (uint8_t i = 0; i < wave.length; i++) {
+        timings[i] = wave.timings[i];
+        amplitudes[i] = wave.amplitudes[i];
     }
 
-    return vibrate_driver_run_waveform(fd, &params);
+    while (1) {
+        pthread_mutex_lock(&thread_args->mutex);
+        forcestop = thread_args->forcestop;
+        if (thread_args->forcestop) {
+            pthread_mutex_unlock(&thread_args->mutex);
+            break;
+        }
+        pthread_mutex_unlock(&thread_args->mutex);
+
+        if (index < wave.length) {
+            amplitude = amplitudes[index];
+            duration = timings[index++];
+            if (duration <= 0) {
+                continue;
+            }
+            if (amplitude != 0) {
+                if (on_duration <= 0) {
+                    on_duration = get_total_on_duration(timings, amplitudes, index - 1, wave.repeat, wave.length);
+                    do_vibrator_on(fd, on_duration, amplitude);
+                } else {
+                    do_vibrator_set_amplitude(fd, amplitude);
+                }
+            }
+            wait_time = delay_locked(forcestop, duration);
+            if (amplitude != 0) {
+                on_duration -= wait_time;
+            }
+        } else if (wave.repeat < 0) {
+            break;
+        } else {
+            index = wave.repeat;
+        }
+    }
+
+    pthread_cond_signal(&thread_args->condition);
+
+    return NULL;
 }
 
 /****************************************************************************
@@ -217,7 +433,6 @@ static int vibrator_init(void)
     int ret;
     static char calibrate_value[32];
 
-
     fd = open(VIBRATOR_DEV_FS, O_CLOEXEC | O_RDWR);
     if (fd < 0) {
         DBG("vibrator open failed, errno = %d", errno);
@@ -248,6 +463,146 @@ static int vibrator_init(void)
     return fd;
 }
 
+/****************************************************************************
+ * Name: vibrator_mode_select()
+ *
+ * Description:
+ *   choose vibration mode
+ *
+ * Input Parameters:
+ *   vibra - the wave of vibrator_t
+ *   args - the threadargs
+ *
+ ****************************************************************************/
+
+void vibrator_mode_select(vibrator_t vibra, void* args)
+{
+    int ret;
+    pthread_attr_t vibattr;
+    pthread_t vibra_thread;
+
+    pthread_attr_init(&vibattr);
+    pthread_attr_setstacksize(&vibattr, 256);
+    threadargs* thread_args;
+    thread_args = (threadargs*)args;
+
+    switch (vibra.type) {
+    case VIBRATION_WAVEFORM: {
+        pthread_mutex_lock(&thread_args->mutex);
+        if (thread_args->forcestop == false) {
+            thread_args->forcestop = true;
+            pthread_cond_wait(&thread_args->condition, &thread_args->mutex);
+            thread_args->forcestop = false;
+        } else {
+            thread_args->forcestop = false;
+        }
+        pthread_mutex_unlock(&thread_args->mutex);
+        thread_args->wave = vibra.wave;
+        pthread_create(&vibra_thread, &vibattr, receive_waveform, args);
+        break;
+    }
+    case VIBRATION_EFFECT: {
+        thread_args->forcestop = true;
+        ret = receive_predefined(vibra.effectid, thread_args->fd);
+        DBG("receive_predefined ret = %d", ret);
+        break;
+    }
+    case VIBRATION_COMPOSITION: {
+        thread_args->forcestop = true;
+        ret = receive_compositions(vibra.comp, thread_args->fd);
+        DBG("receive_compositions ret = %d", ret);
+        break;
+    }
+    case VIBRATION_STOP: {
+        thread_args->forcestop = true;
+        ret = vibrate_driver_stop(thread_args->fd);
+        DBG("vibrate driver stop ret = %d", ret);
+        break;
+    }
+    default: {
+        break;
+    }
+    }
+}
+
+/****************************************************************************
+ * Name: rpmsg_server_thread()
+ *
+ * Description:
+ *   cross-core communication
+ *
+ * Input Parameters:
+ *   args - the threadargs
+ *
+ ****************************************************************************/
+
+void* rpmsg_server_thread(void* arg)
+{
+    int server_fd, client_fd;
+    struct pollfd pfd;
+    socklen_t client_len;
+
+    vibrator_t vibra;
+    threadargs* thread_rpmsg = (threadargs*)arg;
+
+    server_fd = socket(PF_RPMSG, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (server_fd < 0) {
+        DBG("server: socket failure: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+
+    const struct sockaddr_rpmsg myaddr = {
+        .rp_family = AF_RPMSG,
+        .rp_name = CONNECT_NAME,
+        .rp_cpu = "",
+    };
+
+    if (bind(server_fd, (struct sockaddr*)&myaddr, sizeof(myaddr)) == -1) {
+        DBG("server: bind failure: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(server_fd, MAX_CLIENTS) == -1) {
+        DBG("server: listen failure %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&pfd, 0, sizeof(struct pollfd));
+    pfd.fd = server_fd;
+    pfd.events = POLLIN;
+
+    while (1) {
+        int ret = poll(&pfd, 1, -1);
+        if (ret == -1) {
+            DBG("server: poll failure: %d\n", errno);
+            exit(EXIT_FAILURE);
+        }
+
+        if (pfd.revents & POLLIN) {
+            client_fd = accept(server_fd, (struct sockaddr*)&myaddr, &client_len);
+            if (client_fd < 0) {
+                break;
+            }
+
+            ret = recv(client_fd, &vibra, sizeof(vibrator_t), 0);
+            if (ret <= 0) {
+                if (ret == 0) {
+                    DBG("client %d disconnected\n", client_fd);
+                } else {
+                    DBG("receive error\n");
+                }
+            }
+
+            thread_rpmsg->forcestop = true;
+            vibrator_mode_select(vibra, thread_rpmsg);
+            close(client_fd);
+        }
+    }
+
+    close(server_fd);
+    return NULL;
+}
+
 int main(int argc, FAR char* argv[])
 {
     int fd;
@@ -255,14 +610,26 @@ int main(int argc, FAR char* argv[])
     mqd_t mq;
     vibrator_t vibra_t;
     struct mq_attr attr;
-
-    attr.mq_maxmsg = MAX_MSG_NUM;
-    attr.mq_msgsize = MAX_MSG_SIZE;
+    threadargs thread_args;
+    pthread_t rpmsg_thread;
 
     fd = vibrator_init();
     if (fd < 0) {
         return fd;
     }
+
+    thread_args.fd = fd;
+    thread_args.forcestop = true;
+    thread_args.mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    thread_args.condition = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+
+    if (pthread_create(&rpmsg_thread, NULL, rpmsg_server_thread, &thread_args) != 0) {
+        DBG("pthread_create failed");
+        exit(EXIT_FAILURE);
+    }
+
+    attr.mq_maxmsg = MAX_MSG_NUM;
+    attr.mq_msgsize = MAX_MSG_SIZE;
 
     mq = mq_open(QUEUE_NAME, O_CREAT | O_RDONLY, 0660, &attr);
     if (mq == (mqd_t)-1) {
@@ -280,31 +647,13 @@ int main(int argc, FAR char* argv[])
             return 0;
         }
 
-        switch (vibra_t.type) {
-        case VIBRATION_WAVEFORM: {
-            ret = receive_waveform(vibra_t.wave, fd);
-            DBG("receive_waveform ret = %d", ret);
-            break;
-        }
-        case VIBRATION_EFFECT: {
-            ret = receive_predefined(vibra_t.effectid, fd);
-            DBG("receive_predefined ret = %d", ret);
-            break;
-        }
-        case VIBRATION_COMPOSITION: {
-            ret = receive_compositions(vibra_t.comp, fd);
-            DBG("receive_compositions ret = %d", ret);
-            break;
-        }
-        case VIBRATION_STOP: {
-            ret = vibrate_driver_stop(fd);
-            DBG("vibrate driver stop ret = %d", ret);
-            break;
-        }
-        default: {
-            break;
-        }
-        }
+        thread_args.forcestop = true;
+        vibrator_mode_select(vibra_t, &thread_args);
+    }
+
+    if (pthread_join(rpmsg_thread, NULL) != 0) {
+        DBG("pthread_join failed");
+        exit(EXIT_FAILURE);
     }
 
     close(fd);

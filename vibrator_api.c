@@ -19,11 +19,14 @@
  ****************************************************************************/
 
 #include <fcntl.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <log/log.h>
+#include <netpacket/rpmsg.h>
+#include <sys/socket.h>
 
 #include "vibrator_api.h"
 
@@ -71,6 +74,66 @@ static int vib_commit(vibrator_t buffer)
 }
 
 /****************************************************************************
+ * Name: vib_rpmsg_commit()
+ *
+ * Description:
+ *   use cross-core communication
+ *
+ * Input Parameters:
+ *   buffer - the type of the vibrator_t
+ *
+ * Returned Value:
+ *   returns the flag that the vibration is send
+ *
+ ****************************************************************************/
+
+static int vib_rpmsg_commit(vibrator_t buffer)
+{
+    int ret;
+    int client_fd;
+
+    client_fd = socket(PF_RPMSG, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (client_fd < 0) {
+        DBG("socket");
+        return 0;
+    }
+
+    const struct sockaddr_rpmsg myaddr = {
+        .rp_family = AF_RPMSG,
+        .rp_name = CONNECT_NAME,
+        .rp_cpu = CPU_CORE,
+    };
+
+    DBG("connect begin\n");
+    ret = connect(client_fd, (struct sockaddr*)&myaddr, sizeof(myaddr));
+    if (ret < 0 && errno == EINPROGRESS) {
+        struct pollfd pfd;
+        memset(&pfd, 0, sizeof(struct pollfd));
+        pfd.fd = client_fd;
+        pfd.events = POLLOUT;
+
+        ret = poll(&pfd, 1, -1);
+        if (ret < 0) {
+            DBG("client: poll failure: %d\n", errno);
+            goto errout_with_socket;
+        }
+    } else if (ret < 0) {
+        DBG("client: connect failure: %d\n", errno);
+        goto errout_with_socket;
+    }
+
+    ret = send(client_fd, &buffer, sizeof(vibrator_t), 0);
+    if (ret < 0) {
+        DBG("send fail %d", ret);
+        return ret;
+    }
+
+errout_with_socket:
+    close(client_fd);
+    return 0;
+}
+
+/****************************************************************************
  * Public Functions
  *
  * Description:
@@ -103,8 +166,14 @@ uint8_t vibrator_create_compositions(compositions_t data)
     buffer.type = VIBRATION_COMPOSITION;
     buffer.comp = data;
 
-    if ((ret = vib_commit(buffer)) < 0) {
-        return ret;
+    if (CROSS_CORE) {
+        if ((ret = vib_rpmsg_commit(buffer)) < 0) {
+            return ret;
+        }
+    } else {
+        if ((ret = vib_commit(buffer)) < 0) {
+            return ret;
+        }
     }
 
     return ret;
@@ -145,8 +214,14 @@ uint8_t vibrator_create_waveform(uint32_t timings[], uint8_t amplitudes[],
     buffer.type = VIBRATION_WAVEFORM;
     buffer.wave = wave;
 
-    if ((ret = vib_commit(buffer)) < 0) {
-        return ret;
+    if (CROSS_CORE) {
+        if ((ret = vib_rpmsg_commit(buffer)) < 0) {
+            return ret;
+        }
+    } else {
+        if ((ret = vib_commit(buffer)) < 0) {
+            return ret;
+        }
     }
 
     return ret;
@@ -203,8 +278,14 @@ uint8_t vibrator_create_predefined(uint8_t effect_id)
     buffer.type = VIBRATION_EFFECT;
     buffer.effectid = effect_id;
 
-    if ((ret = vib_commit(buffer)) < 0) {
-        return ret;
+    if (CROSS_CORE) {
+        if ((ret = vib_rpmsg_commit(buffer)) < 0) {
+            return ret;
+        }
+    } else {
+        if ((ret = vib_commit(buffer)) < 0) {
+            return ret;
+        }
     }
 
     return ret;
@@ -232,6 +313,15 @@ int vibrator_cancel(uint8_t vibration_id)
 
     buffer.type = VIBRATION_STOP;
 
-    ret = vib_commit(buffer);
+    if (CROSS_CORE) {
+        if ((ret = vib_rpmsg_commit(buffer)) < 0) {
+            return ret;
+        }
+    } else {
+        if ((ret = vib_commit(buffer)) < 0) {
+            return ret;
+        }
+    }
+
     return ret;
 }
