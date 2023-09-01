@@ -20,6 +20,14 @@ config VIBRATOR
 
 if VIBRATOR
 
+config VIBRATOR_CPU_CORE
+    string "optional core"
+    default "ap"
+
+config VIBRATOR_ENABLE_CROSS_CORE
+    bool "whether to enable cross-core"
+    default n
+
 config VIBRATOR_PRIORITY
 	int "task priority"
 	default 100

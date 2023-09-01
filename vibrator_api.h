@@ -28,6 +28,17 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+#define CPU_CORE CONFIG_VIBRATOR_CPU_CORE
+
+#ifndef CONFIG_VIBRATOR_ENABLE_CROSS_CORE
+#define CROSS_CORE false
+#else
+#define CROSS_CORE true
+#endif
+
+#define CONNECT_NAME "/rpmsg_vibratord"
+#define MAX_CLIENTS 16
+
 #define QUEUE_NAME   "/vibratord"
 #define MAX_MSG_NUM  10
 #define MAX_MSG_SIZE 256
