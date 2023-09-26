@@ -22,7 +22,6 @@
 #include <kvdb.h>
 #include <mqueue.h>
 #include <poll.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,26 +31,15 @@
 #include <nuttx/motor/motor.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 
-#include "vibrator_api.h"
+#include "vibrator.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define VIBRATOR_DEV_FS "/dev/lra0"
-#define MOTO_CALI_PREFIX "ro.factory.motor_calib"
-#define MAX_VIBRATION_STRENGTH_LEVEL (100)
-
 #define DBG(format, args...) SLOGD(format, ##args)
-
-typedef struct {
-    int fd;
-    bool forcestop;
-    waveform_t wave;
-    pthread_mutex_t mutex;
-    pthread_cond_t condition;
-} threadargs;
 
 /****************************************************************************
  * Private Functions
@@ -76,6 +64,11 @@ static int vibrate_driver_run_waveform(int fd,
                                        FAR struct motor_params_s* params)
 {
     int ret;
+
+    if (fd < 0) {
+        DBG("failed to run waveform fd");
+        return fd;
+    }
 
     ret = ioctl(fd, MTRIOC_SET_MODE, MOTOR_OPMODE_PATTERN);
     if (ret < 0) {
@@ -115,6 +108,10 @@ static int vibrate_driver_stop(int fd)
 {
     int ret;
 
+    if (fd < 0) {
+        DBG("failed to open fd to stop");
+        return fd;
+    }
     ret = ioctl(fd, MTRIOC_STOP);
     if (ret < 0) {
         DBG("failed to stop vibrator");
@@ -308,7 +305,7 @@ uint32_t delay_locked(bool forcestop, uint32_t duration)
 }
 
 /****************************************************************************
- * Name: receive_waveform()
+ * Name: receive_waveform_thread()
  *
  * Description:
  *   receive waveform from vibrator_upper file
@@ -318,7 +315,7 @@ uint32_t delay_locked(bool forcestop, uint32_t duration)
  *
  ****************************************************************************/
 
-static void* receive_waveform(void* args)
+static void* receive_waveform_thread(void* args)
 {
     int fd;
     int index;
@@ -417,10 +414,10 @@ static int receive_predefined(int effectid, int fd)
 }
 
 /****************************************************************************
- * Name: vibrator_cali()
+ * Name: vibrator_init()
  *
  * Description:
- *   calibrate of the vibrator
+ *   calibrate of the vibrator and open the file descriptor
  *
  * Returned Value:
  *   return file descriptor
@@ -431,7 +428,7 @@ static int vibrator_init(void)
 {
     int fd;
     int ret;
-    static char calibrate_value[32];
+    char calibrate_value[32];
 
     fd = open(VIBRATOR_DEV_FS, O_CLOEXEC | O_RDWR);
     if (fd < 0) {
@@ -486,6 +483,11 @@ void vibrator_mode_select(vibrator_t vibra, void* args)
     threadargs* thread_args;
     thread_args = (threadargs*)args;
 
+    if (args == NULL) {
+        DBG("mode select args is NULL");
+        return;
+    }
+
     switch (vibra.type) {
     case VIBRATION_WAVEFORM: {
         pthread_mutex_lock(&thread_args->mutex);
@@ -498,7 +500,7 @@ void vibrator_mode_select(vibrator_t vibra, void* args)
         }
         pthread_mutex_unlock(&thread_args->mutex);
         thread_args->wave = vibra.wave;
-        pthread_create(&vibra_thread, &vibattr, receive_waveform, args);
+        pthread_create(&vibra_thread, &vibattr, receive_waveform_thread, thread_args);
         break;
     }
     case VIBRATION_EFFECT: {
@@ -525,93 +527,40 @@ void vibrator_mode_select(vibrator_t vibra, void* args)
     }
 }
 
-/****************************************************************************
- * Name: rpmsg_server_thread()
- *
- * Description:
- *   cross-core communication
- *
- * Input Parameters:
- *   args - the threadargs
- *
- ****************************************************************************/
-
-void* rpmsg_server_thread(void* arg)
-{
-    int server_fd, client_fd;
-    struct pollfd pfd;
-    socklen_t client_len;
-
-    vibrator_t vibra;
-    threadargs* thread_rpmsg = (threadargs*)arg;
-
-    server_fd = socket(PF_RPMSG, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (server_fd < 0) {
-        DBG("server: socket failure: %d\n", errno);
-        exit(EXIT_FAILURE);
-    }
-
-    const struct sockaddr_rpmsg myaddr = {
-        .rp_family = AF_RPMSG,
-        .rp_name = CONNECT_NAME,
-        .rp_cpu = "",
-    };
-
-    if (bind(server_fd, (struct sockaddr*)&myaddr, sizeof(myaddr)) == -1) {
-        DBG("server: bind failure: %d\n", errno);
-        exit(EXIT_FAILURE);
-    }
-
-    if (listen(server_fd, MAX_CLIENTS) == -1) {
-        DBG("server: listen failure %d\n", errno);
-        exit(EXIT_FAILURE);
-    }
-
-    memset(&pfd, 0, sizeof(struct pollfd));
-    pfd.fd = server_fd;
-    pfd.events = POLLIN;
-
-    while (1) {
-        int ret = poll(&pfd, 1, -1);
-        if (ret == -1) {
-            DBG("server: poll failure: %d\n", errno);
-            exit(EXIT_FAILURE);
-        }
-
-        if (pfd.revents & POLLIN) {
-            client_fd = accept(server_fd, (struct sockaddr*)&myaddr, &client_len);
-            if (client_fd < 0) {
-                break;
-            }
-
-            ret = recv(client_fd, &vibra, sizeof(vibrator_t), 0);
-            if (ret <= 0) {
-                if (ret == 0) {
-                    DBG("client %d disconnected\n", client_fd);
-                } else {
-                    DBG("receive error\n");
-                }
-            }
-
-            thread_rpmsg->forcestop = true;
-            vibrator_mode_select(vibra, thread_rpmsg);
-            close(client_fd);
-        }
-    }
-
-    close(server_fd);
-    return NULL;
-}
-
 int main(int argc, FAR char* argv[])
 {
     int fd;
     int ret;
-    mqd_t mq;
     vibrator_t vibra_t;
-    struct mq_attr attr;
     threadargs thread_args;
-    pthread_t rpmsg_thread;
+    int sock_fd[VIB_COUNT];
+    struct pollfd pfd[VIB_COUNT];
+
+    const int family[] = {
+        [VIB_LOCAL] = AF_UNIX,
+        [VIB_REMOTE] = AF_RPMSG,
+    };
+
+    const struct sockaddr_un addr0 = {
+        .sun_family = AF_UNIX,
+        .sun_path = PROP_SERVER_PATH,
+    };
+
+    const struct sockaddr_rpmsg addr1 = {
+        .rp_family = AF_RPMSG,
+        .rp_cpu = "",
+        .rp_name = PROP_SERVER_PATH,
+    };
+
+    const struct sockaddr* addr[] = {
+        [VIB_LOCAL] = (const struct sockaddr*)&addr0,
+        [VIB_REMOTE] = (const struct sockaddr*)&addr1,
+    };
+
+    const socklen_t addrlen[] = {
+        [VIB_LOCAL] = sizeof(struct sockaddr_un),
+        [VIB_REMOTE] = sizeof(struct sockaddr_rpmsg),
+    };
 
     fd = vibrator_init();
     if (fd < 0) {
@@ -623,40 +572,71 @@ int main(int argc, FAR char* argv[])
     thread_args.mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     thread_args.condition = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
 
-    if (pthread_create(&rpmsg_thread, NULL, rpmsg_server_thread, &thread_args) != 0) {
-        DBG("pthread_create failed");
-        exit(EXIT_FAILURE);
-    }
+    memset(sock_fd, 0, sizeof(sock_fd));
 
-    attr.mq_maxmsg = MAX_MSG_NUM;
-    attr.mq_msgsize = MAX_MSG_SIZE;
-
-    mq = mq_open(QUEUE_NAME, O_CREAT | O_RDONLY, 0660, &attr);
-    if (mq == (mqd_t)-1) {
-        DBG("mq_open fail");
-        close(fd);
-        return mq;
-    }
-
-    while (1) {
-        memset(&vibra_t, 0, sizeof(vibrator_t));
-        if (mq_receive(mq, (char*)&vibra_t, MAX_MSG_SIZE, NULL) == -1) {
-            DBG("mq_receive");
-            close(fd);
-            mq_close(mq);
-            return 0;
+    for (int i = 0; i < VIB_COUNT; i++) {
+        sock_fd[i] = socket(family[i], SOCK_STREAM | SOCK_NONBLOCK, 0);
+        if (sock_fd[i] < 0) {
+            DBG("socket failure %d: %d", i, errno);
+            continue;
         }
 
-        thread_args.forcestop = true;
-        vibrator_mode_select(vibra_t, &thread_args);
+        ret = bind(sock_fd[i], addr[i], addrlen[i]);
+        if (ret < 0) {
+            return ret;
+        }
+
+        ret = listen(sock_fd[i], MAX_CLIENTS);
+        if (ret < 0) {
+            return ret;
+        }
     }
 
-    if (pthread_join(rpmsg_thread, NULL) != 0) {
-        DBG("pthread_join failed");
-        exit(EXIT_FAILURE);
+    memset(pfd, 0, sizeof(pfd));
+
+    for (int i = 0; i < VIB_COUNT; i++) {
+        pfd[i].fd = sock_fd[i];
+        pfd[i].events = POLLIN;
+    }
+
+    DBG("listen success");
+
+    while (1) {
+        ret = poll(pfd, VIB_COUNT, -1);
+        if (ret < 0) {
+            DBG("poll failed");
+            break;
+        }
+
+        for (int i = 0; i < VIB_COUNT; i++) {
+            if (pfd[i].revents & POLLIN) {
+                int client_fd = accept(sock_fd[i], NULL, NULL);
+                if (client_fd < 0) {
+                    DBG("accept failed %d: %d", i, errno);
+                    continue;
+                }
+
+                ret = recv(client_fd, &vibra_t, sizeof(vibrator_t), 0);
+                if (ret == -1) {
+                    DBG("recv failed %d: %d", i, errno);
+                } else if (ret == 0) {
+                    DBG("client disconnected %d: %d", i, errno);
+                } else {
+                    thread_args.forcestop = true;
+                    vibrator_mode_select(vibra_t, &thread_args);
+                }
+
+                close(client_fd);
+            }
+        }
+    }
+
+    for (int i = 0; i < VIB_COUNT; i++) {
+        if (sock_fd[i] > 0) {
+            close(sock_fd[i]);
+        }
     }
 
     close(fd);
-    mq_close(mq);
     return ret;
 }

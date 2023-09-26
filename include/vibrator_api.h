@@ -19,30 +19,10 @@
 #define __INCLUDE_NUTTX_VIBRATOR_API_H
 
 /****************************************************************************
- * Included Files
- ****************************************************************************/
-
-#include <mqueue.h>
-
-/****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define CPU_CORE CONFIG_VIBRATOR_CPU_CORE
-
-#ifndef CONFIG_VIBRATOR_ENABLE_CROSS_CORE
-#define CROSS_CORE false
-#else
-#define CROSS_CORE true
-#endif
-
-#define CONNECT_NAME "/rpmsg_vibratord"
-#define MAX_CLIENTS 16
-
-#define QUEUE_NAME   "/vibratord"
-#define MAX_MSG_NUM  10
-#define MAX_MSG_SIZE 256
-
+#define PROP_SERVER_PATH "vibratord"
 #define MAX_AMPLITUDE     255
 #define DEFAULT_AMPLITUDE -1
 
@@ -65,16 +45,7 @@
  * Public Types
  ****************************************************************************/
 
-/* Vibrator types */
-
-enum {
-    VIBRATION_WAVEFORM = 1,
-    VIBRATION_EFFECT = 2,
-    VIBRATION_COMPOSITION = 3,
-    VIBRATION_STOP = 4
-};
-
-/* struct waveform
+/* struct waveform_t
  * @repeat: indicates the location of the start of the array vibration
  * @length: the length of arrays timings and amplitudes
  * @timings: the timings array
@@ -88,7 +59,7 @@ typedef struct {
     uint8_t amplitudes[24];
 } waveform_t;
 
-/* struct composition
+/* struct composition_t
  * @patternid: waveform or wait time
  * @waveloop: number of waveform vibrations
  * @mainloop: the number of vibrations of the patternid array
@@ -104,7 +75,7 @@ typedef struct {
     uint32_t duration;
 } composition_t;
 
-/* struct compositions
+/* struct compositions_t
  * @count: size of pattern
  * @repeatable: the number of times array pattern is played repeatedly
  * @pattern: the number of vibrations of the patternid array
@@ -133,10 +104,10 @@ typedef struct {
 } vibrator_t;
 
 /****************************************************************************
- * Name: vibrator_create_compositions()
+ * Name: vibrator_play_compositions()
  *
  * Description:
- *   create the compositions interface for app
+ *   play the compositions interface for app
  *
  * Input Parameters:
  *   data - the compositions_t of data
@@ -147,13 +118,13 @@ typedef struct {
  *
  ****************************************************************************/
 
-uint8_t vibrator_create_compositions(compositions_t data);
+int vibrator_play_compositions(const compositions_t* data);
 
 /****************************************************************************
- * Name: vibrator_create_waveform()
+ * Name: vibrator_play_waveform()
  *
  * Description:
- *    create waveform vibration effects
+ *    play waveform vibration effects
  *
  * Input Parameters:
  *   timings - timings the element of the timings array
@@ -169,14 +140,14 @@ uint8_t vibrator_create_compositions(compositions_t data);
  *
  ****************************************************************************/
 
-uint8_t vibrator_create_waveform(uint32_t timing[], uint8_t amplitudes[],
-                                 uint8_t repeat, u_int8_t length);
+int vibrator_play_waveform(uint32_t timing[], uint8_t amplitudes[],
+                           uint8_t repeat, uint8_t length);
 
 /****************************************************************************
- * Name: vibrator_create_oneshot()
+ * Name: vibrator_play_oneshot()
  *
  * Description:
- *    create waveform vibration effects
+ *    play waveform vibration effects
  *
  * Input Parameters:
  *   timing - duration of vibration
@@ -188,13 +159,13 @@ uint8_t vibrator_create_waveform(uint32_t timing[], uint8_t amplitudes[],
  *
  ****************************************************************************/
 
-uint8_t vibrator_create_oneshot(uint32_t timing, uint8_t amplitude);
+int vibrator_play_oneshot(uint32_t timing, uint8_t amplitude);
 
 /****************************************************************************
- * Name: vibrator_create_predefined()
+ * Name: vibrator_play_predefined()
  *
  * Devoidscription:
- *    create the predefined interface for app
+ *    play the predefined interface for app
  *
  * Input Parameters:
  *   effectid - effectid of vibrator
@@ -205,7 +176,7 @@ uint8_t vibrator_create_oneshot(uint32_t timing, uint8_t amplitude);
  *
  ****************************************************************************/
 
-uint8_t vibrator_create_predefined(uint8_t effectid);
+int vibrator_play_predefined(uint8_t effectid);
 
 /****************************************************************************
  * Name: vibrator_cancel()
@@ -222,6 +193,6 @@ uint8_t vibrator_create_predefined(uint8_t effectid);
  *
  ****************************************************************************/
 
-int vibrator_cancel(uint8_t vibration_id);
+int vibrator_cancel(void);
 
 #endif /* #define __INCLUDE_NUTTX_VIBRATOR_API_H */
