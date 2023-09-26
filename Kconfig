@@ -15,18 +15,20 @@
 #
 
 config VIBRATOR
-	bool "vibrator service"
+	bool "vibrator"
+	depends on NET_RPMSG
 	default n
 
 if VIBRATOR
 
-config VIBRATOR_CPU_CORE
-    string "optional core"
-    default "ap"
+config VIBRATOR_SERVER
+	bool "vibrator server"
+	default n
 
-config VIBRATOR_ENABLE_CROSS_CORE
-    bool "whether to enable cross-core"
-    default n
+config VIBRATOR_SERVER_CPUNAME
+	string "which cpu vibrator server runs on"
+	depends on !VIBRATOR_SERVER
+	default "ap"
 
 config VIBRATOR_PRIORITY
 	int "task priority"
@@ -34,6 +36,6 @@ config VIBRATOR_PRIORITY
 
 config VIBRATOR_STACKSIZE
 	int "stack size"
-	default DEFAULT_TASK_STACKSIZE
+	default 4096
 
 endif # VIBRATOR

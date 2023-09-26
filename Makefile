@@ -16,9 +16,13 @@
 
 include $(APPDIR)/Make.defs
 
-CSRCS     += vibrator_api.c
-MAINSRC   = vibrator.c
+CSRCS    += vibrator_api.c
+
+ifneq ($(CONFIG_VIBRATOR_SERVER),)
+MAINSRC  += vibrator.c
 PROGNAME  = vibratord
+endif
+
 PRIORITY  = $(CONFIG_VIBRATOR_PRIORITY)
 STACKSIZE = $(CONFIG_VIBRATOR_STACKSIZE)
 MODULE    = $(CONFIG_VIBRATOR_MANAGER)

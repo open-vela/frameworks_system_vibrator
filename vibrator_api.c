@@ -27,8 +27,10 @@
 #include <log/log.h>
 #include <netpacket/rpmsg.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 
-#include "vibrator_api.h"
+#include "vibrator.h"
+#include "./include/vibrator_api.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -56,98 +58,73 @@
 
 static int vib_commit(vibrator_t buffer)
 {
-    mqd_t mq;
-
-    mq = mq_open(QUEUE_NAME, O_RDWR, 0666, NULL);
-    if (mq == (mqd_t)-1) {
-        DBG("mq_open failed errno = %d", -errno);
-        return errno;
-    }
-
-    if (mq_send(mq, (const char*)&buffer, sizeof(buffer), 0) == -1) {
-        DBG("mq_send failed errno = %d", -errno);
-        return errno;
-    }
-
-    mq_close(mq);
-    return 0;
-}
-
-/****************************************************************************
- * Name: vib_rpmsg_commit()
- *
- * Description:
- *   use cross-core communication
- *
- * Input Parameters:
- *   buffer - the type of the vibrator_t
- *
- * Returned Value:
- *   returns the flag that the vibration is send
- *
- ****************************************************************************/
-
-static int vib_rpmsg_commit(vibrator_t buffer)
-{
+    int fd;
     int ret;
-    int client_fd;
-
-    client_fd = socket(PF_RPMSG, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (client_fd < 0) {
-        DBG("socket");
-        return 0;
+#ifdef CONFIG_VIBRATOR_SERVER
+    fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0);
+#else
+    fd = socket(AF_RPMSG, SOCK_STREAM | SOCK_NONBLOCK, 0);
+#endif
+    if (fd < 0) {
+        DBG("socket fail");
+        return fd;
     }
 
-    const struct sockaddr_rpmsg myaddr = {
-        .rp_family = AF_RPMSG,
-        .rp_name = CONNECT_NAME,
-        .rp_cpu = CPU_CORE,
+#ifdef CONFIG_VIBRATOR_SERVER
+    struct sockaddr_un addr = {
+        .sun_family = AF_UNIX,
+        .sun_path = PROP_SERVER_PATH,
     };
+#else
+    struct sockaddr_rpmsg addr = {
+        .rp_family = AF_RPMSG,
+        .rp_name = PROP_SERVER_PATH,
+        .rp_cpu = CONFIG_VIBRATOR_SERVER_CPUNAME,
+    };
+#endif
 
-    DBG("connect begin\n");
-    ret = connect(client_fd, (struct sockaddr*)&myaddr, sizeof(myaddr));
+    ret = connect(fd, (const struct sockaddr*)&addr, sizeof(addr));
     if (ret < 0 && errno == EINPROGRESS) {
         struct pollfd pfd;
         memset(&pfd, 0, sizeof(struct pollfd));
-        pfd.fd = client_fd;
+        pfd.fd = fd;
         pfd.events = POLLOUT;
 
         ret = poll(&pfd, 1, -1);
         if (ret < 0) {
-            DBG("client: poll failure: %d\n", errno);
+            DBG("client: poll failure: %d", errno);
             goto errout_with_socket;
         }
     } else if (ret < 0) {
-        DBG("client: connect failure: %d\n", errno);
+        DBG("client: connect failure: %d", errno);
         goto errout_with_socket;
     }
 
-    ret = send(client_fd, &buffer, sizeof(vibrator_t), 0);
+    ret = send(fd, &buffer, sizeof(vibrator_t), 0);
     if (ret < 0) {
         DBG("send fail %d", ret);
-        return ret;
     }
 
 errout_with_socket:
-    close(client_fd);
-    return 0;
+    close(fd);
+    return ret;
 }
 
 /****************************************************************************
  * Public Functions
  *
  * Description:
- *   the file contains five interfaces create_compositions,
- *   create_waveform, create_oneshot, create_predefined and vibrator_cancel,
+ *   the file contains five interfaces play_compositions,
+ *   play_waveform, play_oneshot, play_predefined and vibrator_cancel,
  *   and the detailed information of each interface has been described
  *
  ****************************************************************************/
 
 /****************************************************************************
- * Name: vibrator_create_compositions()
+ * Name: vibrator_play_compositions()
  *
  * Description:
- *   create the compositions interface for app
+ *   play the compositions interface for app
  *
  * Input Parameters:
  *   data - the compositions_t of data
@@ -158,32 +135,21 @@ errout_with_socket:
  *
  ****************************************************************************/
 
-uint8_t vibrator_create_compositions(compositions_t data)
+int vibrator_play_compositions(const compositions_t* data)
 {
-    uint8_t ret;
     vibrator_t buffer;
 
     buffer.type = VIBRATION_COMPOSITION;
-    buffer.comp = data;
+    buffer.comp = *data;
 
-    if (CROSS_CORE) {
-        if ((ret = vib_rpmsg_commit(buffer)) < 0) {
-            return ret;
-        }
-    } else {
-        if ((ret = vib_commit(buffer)) < 0) {
-            return ret;
-        }
-    }
-
-    return ret;
+    return vib_commit(buffer);
 }
 
 /****************************************************************************
- * Name: vibrator_create_waveform()
+ * Name: vibrator_play_waveform()
  *
  * Description:
- *    create waveform vibration effects
+ *    play waveform vibration effects
  *
  * Input Parameters:
  *   timings - timings the element of the timings array
@@ -199,10 +165,9 @@ uint8_t vibrator_create_compositions(compositions_t data)
  *
  ****************************************************************************/
 
-uint8_t vibrator_create_waveform(uint32_t timings[], uint8_t amplitudes[],
-                                 uint8_t repeat, u_int8_t length)
+int vibrator_play_waveform(uint32_t timings[], uint8_t amplitudes[],
+                           uint8_t repeat, uint8_t length)
 {
-    uint8_t ret;
     waveform_t wave;
     vibrator_t buffer;
 
@@ -214,24 +179,14 @@ uint8_t vibrator_create_waveform(uint32_t timings[], uint8_t amplitudes[],
     buffer.type = VIBRATION_WAVEFORM;
     buffer.wave = wave;
 
-    if (CROSS_CORE) {
-        if ((ret = vib_rpmsg_commit(buffer)) < 0) {
-            return ret;
-        }
-    } else {
-        if ((ret = vib_commit(buffer)) < 0) {
-            return ret;
-        }
-    }
-
-    return ret;
+    return vib_commit(buffer);
 }
 
 /****************************************************************************
- * Name: vibrator_create_oneshot()
+ * Name: vibrator_play_oneshot()
  *
  * Description:
- *    create waveform vibration effects
+ *    play waveform vibration effects
  *
  * Input Parameters:
  *   timing - duration of vibration
@@ -243,7 +198,7 @@ uint8_t vibrator_create_waveform(uint32_t timings[], uint8_t amplitudes[],
  *
  ****************************************************************************/
 
-uint8_t vibrator_create_oneshot(uint32_t timing, uint8_t amplitude)
+int vibrator_play_oneshot(uint32_t timing, uint8_t amplitude)
 {
     uint8_t ret;
     uint32_t timings[] = { timing };
@@ -251,15 +206,15 @@ uint8_t vibrator_create_oneshot(uint32_t timing, uint8_t amplitude)
     uint8_t len = 1;
     uint8_t rep = -1;
 
-    ret = vibrator_create_waveform(timings, amplitudes, len, rep);
+    ret = vibrator_play_waveform(timings, amplitudes, len, rep);
     return ret;
 }
 
 /****************************************************************************
- * Name: vibrator_create_predefined()
+ * Name: vibrator_play_predefined()
  *
  * Description:
- *    create the predefined interface for app
+ *    play the predefined interface for app
  *
  * Input Parameters:
  *   effectid - effectid of vibrator
@@ -270,25 +225,14 @@ uint8_t vibrator_create_oneshot(uint32_t timing, uint8_t amplitude)
  *
  ****************************************************************************/
 
-uint8_t vibrator_create_predefined(uint8_t effect_id)
+int vibrator_play_predefined(uint8_t effect_id)
 {
-    int ret;
     vibrator_t buffer;
 
     buffer.type = VIBRATION_EFFECT;
     buffer.effectid = effect_id;
 
-    if (CROSS_CORE) {
-        if ((ret = vib_rpmsg_commit(buffer)) < 0) {
-            return ret;
-        }
-    } else {
-        if ((ret = vib_commit(buffer)) < 0) {
-            return ret;
-        }
-    }
-
-    return ret;
+    return vib_commit(buffer);
 }
 
 /****************************************************************************
@@ -306,22 +250,11 @@ uint8_t vibrator_create_predefined(uint8_t effect_id)
  *
  ****************************************************************************/
 
-int vibrator_cancel(uint8_t vibration_id)
+int vibrator_cancel(void)
 {
-    int ret;
     vibrator_t buffer;
 
     buffer.type = VIBRATION_STOP;
 
-    if (CROSS_CORE) {
-        if ((ret = vib_rpmsg_commit(buffer)) < 0) {
-            return ret;
-        }
-    } else {
-        if ((ret = vib_commit(buffer)) < 0) {
-            return ret;
-        }
-    }
-
-    return ret;
+    return vib_commit(buffer);
 }
