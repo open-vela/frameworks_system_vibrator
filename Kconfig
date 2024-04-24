@@ -16,7 +16,7 @@
 
 config VIBRATOR
 	bool "vibrator"
-	depends on NET_RPMSG
+	depends on NET_RPMSG || NET_LOCAL
 	default n
 
 if VIBRATOR
@@ -37,5 +37,28 @@ config VIBRATOR_PRIORITY
 config VIBRATOR_STACKSIZE
 	int "stack size"
 	default 4096
+
+config DEBUG_VIBRATOR
+	bool "vibrator debug output"
+	default n
+
+if DEBUG_VIBRATOR
+
+config VIBRATOR_ERROR
+	bool "vibrator error output"
+	default n
+	depends on DEBUG_ERROR
+
+config VIBRATOR_WARN
+	bool "vibrator warn output"
+	default n
+	depends on DEBUG_WARN
+
+config VIBRATOR_INFO
+	bool "vibrator info output"
+	default n
+	depends on DEBUG_INFO
+
+endif # DEBUG_VIBRATOR
 
 endif # VIBRATOR

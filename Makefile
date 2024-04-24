@@ -19,7 +19,7 @@ include $(APPDIR)/Make.defs
 CSRCS    += vibrator_api.c
 
 ifneq ($(CONFIG_VIBRATOR_SERVER),)
-MAINSRC  += vibrator.c
+MAINSRC  += vibrator_server.c
 PROGNAME  = vibratord
 endif
 
