@@ -1,0 +1,14 @@
+cc_library_headers {
+    name: "libvibrator_headers",
+    export_include_dirs: ["."],
+}
+
+cc_library {
+    name: "libvibrator_api",
+    srcs: [
+        "vibrator_api.c",
+    ],
+    cflags: [
+        "-DCONFIG_VIBRATOR_SERVER_CPUNAME=\"ap\""
+    ],
+}
