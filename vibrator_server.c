@@ -89,6 +89,7 @@ typedef struct {
 
 typedef struct {
     bool forcestop;
+    bool condition_is_met;
     vibrator_waveform_t wave;
     pthread_mutex_t mutex;
     pthread_cond_t condition;
@@ -183,6 +184,9 @@ static int ff_play(ff_dev_t* ff_dev, int effect_id, uint32_t timeout_ms,
             *play_length_ms = data[1] * 1000 + data[2];
             VIBRATORINFO("*play_length_ms = %ld", *play_length_ms);
         }
+
+        if (ff_dev->curr_app_id == VIBRATOR_INVALID_VALUE)
+            return ret;
 
         /* write the play event to vibrator device */
 
@@ -470,7 +474,7 @@ static int receive_start(ff_dev_t* ff_dev, uint32_t timeoutms)
  ****************************************************************************/
 
 static int32_t get_total_on_duration(uint32_t timings[], uint8_t amplitudes[],
-    uint8_t start_index, uint8_t repeat_index, uint8_t len)
+    uint8_t start_index, int8_t repeat_index, uint8_t len)
 {
     uint8_t i = start_index;
     uint32_t timing = 0;
@@ -626,6 +630,9 @@ static void* receive_waveform_thread(void* args)
         }
     }
 
+    pthread_mutex_lock(&thread_args->mutex);
+    thread_args->condition_is_met = true;
+    pthread_mutex_unlock(&thread_args->mutex);
     pthread_cond_signal(&thread_args->condition);
 
     VIBRATORINFO("receive_waveform_thread exit");
@@ -833,23 +840,26 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     ff_dev_t* ff_dev;
     int ret;
 
+    if (args == NULL) {
+        VIBRATORERR("mode select args is NULL");
+        return -EINVAL;
+    }
+
     pthread_attr_init(&vibattr);
     pthread_attr_setstacksize(&vibattr, 2048);
 
     thread_args = (threadargs*)args;
     ff_dev = thread_args->ff_dev;
 
-    if (args == NULL) {
-        VIBRATORERR("mode select args is NULL");
-        return -EINVAL;
-    }
-
     switch (msg->type) {
     case VIBRATION_WAVEFORM: {
         pthread_mutex_lock(&thread_args->mutex);
         if (thread_args->forcestop == false) {
             thread_args->forcestop = true;
-            pthread_cond_wait(&thread_args->condition, &thread_args->mutex);
+            while (!thread_args->condition_is_met) {
+                pthread_cond_wait(&thread_args->condition, &thread_args->mutex);
+            }
+            thread_args->condition_is_met = false;
             thread_args->forcestop = false;
         } else {
             thread_args->forcestop = false;
@@ -948,6 +958,7 @@ int main(int argc, char* argv[])
     }
 
     thread_args.forcestop = true;
+    thread_args.condition_is_met = false;
     thread_args.mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     thread_args.condition = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
     thread_args.ff_dev = &ff_dev;
@@ -994,17 +1005,19 @@ int main(int argc, char* argv[])
                     continue;
                 }
 
+                memset(&msg, 0, sizeof(vibrator_msg_t));
                 ret = recv(client_fd, &msg, sizeof(vibrator_msg_t), 0);
-                if (ret == -1) {
+                if (ret < msg.request_len) {
                     VIBRATORERR("recv failed %d: %d", i, errno);
-                } else if (ret == 0) {
-                    VIBRATORWARN("client disconnected %d: %d", i, errno);
                 } else {
                     thread_args.forcestop = true;
                     VIBRATORINFO("recv client: recv len = %d, type = %d", ret, msg.type);
                     ret = vibrator_mode_select(&msg, &thread_args);
                     msg.result = ret;
-                    send(client_fd, &msg, msg.response_len, 0);
+                    ret = send(client_fd, &msg, msg.response_len, 0);
+                    if (ret < 0) {
+                        VIBRATORERR("send fail, errno = %d", errno);
+                    }
                 }
 
                 close(client_fd);
