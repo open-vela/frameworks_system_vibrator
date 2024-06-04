@@ -38,6 +38,10 @@ config VIBRATOR_STACKSIZE
 	int "stack size"
 	default 4096
 
+config VIBRATOR_TEST
+	bool "vibrator api test"
+	default n
+
 config DEBUG_VIBRATOR
 	bool "vibrator debug output"
 	default n

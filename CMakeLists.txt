@@ -38,6 +38,20 @@ if(CONFIG_VIBRATOR)
       vibrator_server.c)
   endif()
 
+  if(CONFIG_VIBRATOR_TEST)
+    nuttx_add_application(
+      NAME
+      vibrator_test
+      PRIORITY
+      ${CONFIG_VIBRATOR_PRIORITY}
+      STACKSIZE
+      ${CONFIG_VIBRATOR_STACKSIZE}
+      MODULE
+      ${CONFIG_VIBRATOR}
+      SRCS
+      vibrator_test.c)
+  endif()
+
   target_include_directories(vibrator_api PUBLIC .)
   target_sources(vibrator_api PRIVATE ${CSRCS})
 
