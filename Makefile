@@ -20,7 +20,12 @@ CSRCS    += vibrator_api.c
 
 ifneq ($(CONFIG_VIBRATOR_SERVER),)
 MAINSRC  += vibrator_server.c
-PROGNAME  = vibratord
+PROGNAME += vibratord
+endif
+
+ifneq ($(CONFIG_VIBRATOR_TEST),)
+MAINSRC  += vibrator_test.c
+PROGNAME += vibrator_test
 endif
 
 PRIORITY  = $(CONFIG_VIBRATOR_PRIORITY)
