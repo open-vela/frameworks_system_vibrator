@@ -846,7 +846,7 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     }
 
     pthread_attr_init(&vibattr);
-    pthread_attr_setstacksize(&vibattr, 2048);
+    pthread_attr_setstacksize(&vibattr, CONFIG_VIBRATOR_STACKSIZE);
 
     thread_args = (threadargs*)args;
     ff_dev = thread_args->ff_dev;

@@ -18,14 +18,15 @@
  * Included Files
  ****************************************************************************/
 
+#include <errno.h>
 #include <fcntl.h>
-#include <log/log.h>
 #include <netpacket/rpmsg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <unistd.h>
 
 #include "vibrator_internal.h"
 
