@@ -35,10 +35,18 @@
 #define VIBRATOR_TEST_DEFAULT_TIME 3000
 #define VIBRATOR_TEST_DEFAULT_REPEAT -1
 #define VIBRATOR_TEST_DEFAULT_API 1
+#define VIBRATOR_TEST_DEFAULT_STRENGTH 2
+#define VIBRATOR_TEST_WAVEFORM_MAX 7
 
 /****************************************************************************
  * Private Types
  ****************************************************************************/
+
+struct waveform_arrays_s {
+    uint32_t* timings;
+    uint8_t* amplitudes;
+    uint8_t length;
+};
 
 struct vibrator_test_s {
     int api;
@@ -46,7 +54,10 @@ struct vibrator_test_s {
     int amplitude;
     int intensity;
     int effectid;
+    int es;
     int repeat;
+    int waveformid;
+    struct waveform_arrays_s waveform_args[VIBRATOR_TEST_WAVEFORM_MAX];
 };
 
 enum vibrator_test_apino_e {
@@ -78,29 +89,29 @@ static void usage(void)
            "\t[-e <val> ] Effect id, default: 5\n"
            "\t[-r <val> ] The index into the timings array at which to repeat,\n"
            "\t            -1 means no repeat, default: -1\n"
-           "\t[-i <val> ] The intensity of vibration[0,3], default: 2\n");
+           "\t[-i <val> ] The intensity of vibration[0,3], default: 2\n"
+           "\t[-s <val> ] The effect strength, [0, 2], default: 2\n"
+           "\t[-l <val> ] The waveform array id, [0, 6], default: 0\n");
 }
 
-static int test_play_predefined(uint8_t id)
+static int test_play_predefined(uint8_t id, vibrator_effect_strength_e es)
 {
     int play_length_ms;
     int ret;
-
-    ret = vibrator_play_predefined(id, VIBRATION_STRONG, &play_length_ms);
+    printf("id = %d, es = %d\n", id, es);
+    ret = vibrator_play_predefined(id, es, &play_length_ms);
     printf("Effect(with strength) play length: %d\n", play_length_ms);
     return ret;
 }
 
-static int test_paly_waveform(int repeat)
+static int test_paly_waveform(int repeat, struct waveform_arrays_s waveform_args)
 {
-    uint32_t timings[] = { 100, 200, 100, 200 };
-    uint8_t amplitudes[] = { 0, 255, 100, 0 };
-    uint8_t length = sizeof(timings) / sizeof(timings[0]);
-
-    return vibrator_play_waveform(timings, amplitudes, repeat, length);
+    printf("repeat = %d, length = %d\n", repeat, waveform_args.length);
+    return vibrator_play_waveform(waveform_args.timings,
+        waveform_args.amplitudes, repeat, waveform_args.length);
 }
 
-static int test_play_primitive(uint8_t id, uint8_t amplitude)
+static int test_play_primitive(uint8_t id, uint16_t amplitude)
 {
     int play_length_ms;
     int ret;
@@ -143,39 +154,58 @@ static int param_parse(int argc, char* argv[],
     const char* apino;
     int ch;
 
-    while ((ch = getopt(argc, argv, "t:a:e:r:i:h")) != EOF) {
+    while ((ch = getopt(argc, argv, "t:a:e:r:i:s:l:h")) != EOF) {
         switch (ch) {
         case 't': {
             printf("%s\n", optarg);
             test_data->time = atoi(optarg);
             printf("%d\n", test_data->time);
             if (test_data->time < 0)
-                return -1;
+                printf("NOTE: Invalid time, use positive integer\n");
             break;
         }
         case 'a': {
             test_data->amplitude = atoi(optarg);
             if (test_data->amplitude < 0 || test_data->amplitude > 255)
-                return -1;
+                printf("NOTE: amplitude should be in range [0,255]\n");
             break;
         }
         case 'e': {
             test_data->effectid = atoi(optarg);
             if (test_data->effectid < 0)
-                return -1;
+                printf("NOTE: effect id should be non-negative\n");
             break;
         }
         case 'r': {
             test_data->repeat = atoi(optarg);
+            printf("test_data->repeat = %d\n", test_data->repeat);
             if (test_data->repeat < -1)
-                return -1;
+                printf("NOTE: Invalid repeat, use -1 to disable \
+                        repeat or index of timings array\n");
             break;
         }
         case 'i': {
             test_data->intensity = atoi(optarg);
             if (test_data->intensity < VIBRATION_INTENSITY_LOW
                 || test_data->intensity > VIBRATION_INTENSITY_HIGH)
+                printf("NOTE: Invalid intensity, use 0, 1, 2, 3\n");
+            break;
+        }
+        case 's': {
+            test_data->es = atoi(optarg);
+            if (test_data->es < VIBRATION_LIGHT
+                || test_data->es > VIBRATION_STRONG)
+                printf("NOTE: Invalid effect strength, use 0, 1, 2\n");
+            break;
+        }
+        case 'l': {
+            test_data->waveformid = atoi(optarg);
+            printf("test_data->waveformid = %d\n", test_data->waveformid);
+            if (test_data->waveformid < 0
+                || test_data->waveformid >= VIBRATOR_TEST_WAVEFORM_MAX) {
+                printf("NOTE: Invalid waveform id, use 0 to 6\n");
                 return -1;
+            }
             break;
         }
         case 'h':
@@ -208,8 +238,8 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
         }
         break;
     case VIBRATOR_TEST_WAVEFORM:
-        printf("API TEST: vibrator_play_waveform\n");
-        ret = test_paly_waveform(test_data->repeat);
+        printf("API TEST: vibrator_play_waveform, id = %d\n", test_data->waveformid);
+        ret = test_paly_waveform(test_data->repeat, test_data->waveform_args[test_data->waveformid]);
         if (ret < 0) {
             printf("play_waveform failed: %d\n", ret);
             return ret;
@@ -217,7 +247,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
         break;
     case VIBRATOR_TEST_PREDEFINED:
         printf("API TEST: vibrator_play_predefined\n");
-        ret = test_play_predefined(test_data->effectid);
+        ret = test_play_predefined(test_data->effectid, test_data->es);
         if (ret < 0) {
             printf("play_predefined failed: %d\n", ret);
             return ret;
@@ -284,7 +314,48 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
         break;
     }
 
+    printf("PASSED\n");
     return 0;
+}
+
+static void waveform_args_init(struct vibrator_test_s* test_data)
+{
+    static uint32_t timings0[] = { 100, 100, 100, 100 };
+    static uint8_t amplitudes0[] = { 51, 0, 51, 0 };
+    static uint32_t timings1[] = { 200, 100, 0, 100, 200, 100, 1, 100, 200, 100, 200 };
+    static uint8_t amplitudes1[] = { 255, 0, 153, 0, 102, 0, 255, 0, 153, 0, 102 };
+    static uint32_t timings2[] = { 100, 100, 100, 100 };
+    static uint8_t amplitudes2[] = { 255, 0, 102, 0 };
+    static uint32_t timings3[] = { 200, 100, 200, 100 };
+    static uint8_t amplitudes3[] = { 255, 0, 51, 0 };
+    static uint32_t timings4[] = { 4294967295, 0 };
+    static uint8_t amplitudes4[] = { 255, 0 };
+    static uint32_t timings5[] = { 1000 };
+    static uint8_t amplitudes5[] = { 1 };
+    static uint32_t timings6[] = { 2000, 0, 0 };
+    static uint8_t amplitudes6[] = { 100, 0, 0 };
+
+    /* vaild waveform arrays */
+
+    test_data->waveform_args[0] = (struct waveform_arrays_s) { timings0, amplitudes0, 4 };
+    test_data->waveform_args[1] = (struct waveform_arrays_s) { timings1, amplitudes1, 11 };
+
+    /* invalid waveform arrays */
+
+    test_data->waveform_args[2] = (struct waveform_arrays_s) { timings2, amplitudes2, 10 };
+    test_data->waveform_args[3] = (struct waveform_arrays_s) { timings3, amplitudes3, 0 };
+
+    /* boundary waveform arrays */
+
+    test_data->waveform_args[4] = (struct waveform_arrays_s) { timings4, amplitudes4, 2 };
+
+    /* low amplitude waveform arrays */
+
+    test_data->waveform_args[5] = (struct waveform_arrays_s) { timings5, amplitudes5, 1 };
+
+    /* for -r invalid index test*/
+
+    test_data->waveform_args[6] = (struct waveform_arrays_s) { timings6, amplitudes6, 3 };
 }
 
 /****************************************************************************
@@ -301,8 +372,13 @@ int main(int argc, char* argv[])
     test_data.amplitude = VIBRATOR_TEST_DEFAULT_AMPLITUDE;
     test_data.effectid = VIBRATOR_TEST_DEFAULT_EFFECT_ID;
     test_data.repeat = VIBRATOR_TEST_DEFAULT_REPEAT;
+    test_data.es = VIBRATOR_TEST_DEFAULT_STRENGTH;
     test_data.time = VIBRATOR_TEST_DEFAULT_TIME;
     test_data.api = VIBRATOR_TEST_DEFAULT_API;
+
+    /*Init waveform test arrays*/
+    waveform_args_init(&test_data);
+    test_data.waveformid = 0;
 
     /* Parse Argument */
 
