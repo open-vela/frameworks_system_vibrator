@@ -58,14 +58,15 @@
 
 enum {
     VIBRATION_WAVEFORM = 1,
-    VIBRATION_EFFECT = 2,
-    VIBRATION_COMPOSITION = 3,
-    VIBRATION_START = 4,
-    VIBRATION_STOP = 5,
-    VIBRATION_SET_AMPLITUDE = 6,
-    VIBRATION_GET_CAPABLITY = 7,
-    VIBRATION_SET_INTENSITY = 8,
-    VIBRATION_GET_INTENSITY = 9
+    VIBRATION_EFFECT,
+    VIBRATION_COMPOSITION,
+    VIBRATION_START,
+    VIBRATION_STOP,
+    VIBRATION_PRIMITIVE,
+    VIBRATION_SET_AMPLITUDE,
+    VIBRATION_GET_CAPABLITY,
+    VIBRATION_SET_INTENSITY,
+    VIBRATION_GET_INTENSITY
 };
 
 /* struct vibrator_waveform_t
@@ -90,7 +91,10 @@ typedef struct {
 
 typedef struct {
     int effect_id;
-    vibrator_effect_strength_e es;
+    union {
+        vibrator_effect_strength_e es;
+        float amplitude;
+    };
     int32_t play_length;
 } vibrator_effect_t;
 
