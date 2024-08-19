@@ -140,17 +140,41 @@ int vibrator_play_predefined(uint8_t effect_id, vibrator_effect_strength_e es,
     int32_t* play_length);
 
 /****************************************************************************
+ * Name: vibrator_play_primitive()
+ *
+ * Description:
+ *   play a predefined vibration effect with the specified amplitude
+ *
+ * Input Parameters:
+ *   effectid - the ID of the effect to perform
+ *   amplitude - vibration amplitude(0.0~1.0)
+ *   play_length - returned effect play duration
+ *
+ * Returned Value:
+ *   returns the flag that the vibrator playing predefined effect, greater
+ *   than or equal to 0 means success, otherwise it means failure
+ *
+ ****************************************************************************/
+
+int vibrator_play_primitive(uint8_t effect_id, float amplitude,
+    int32_t* play_length);
+
+/****************************************************************************
  * Name: vibrator_get_intensity()
  *
  * Description:
  *   get vibration intensity
  *
+ * Input Parameters:
+ *   intensity - buffer that store intensity
+ *
  * Returned Value:
- *   returns the vibration intensity
+ *   returns the flag indicating get vibrator intensity, greater than or equal
+ *   to 0 means success, otherwise it means failure
  *
  ****************************************************************************/
 
-vibrator_intensity_e vibrator_get_intensity(void);
+int vibrator_get_intensity(vibrator_intensity_e* intensity);
 
 /****************************************************************************
  * Name: vibrator_set_intensity()
