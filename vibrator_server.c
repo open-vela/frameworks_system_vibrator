@@ -962,7 +962,7 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
         break;
     }
     case VIBRATION_GET_INTENSITY: {
-        ret = receive_get_intensity(ff_dev, &msg->intensity);
+        ret = receive_get_intensity(ff_dev, (vibrator_intensity_e*)&msg->intensity);
         VIBRATORINFO("receive get intensity = %d", msg->intensity);
         break;
     }
