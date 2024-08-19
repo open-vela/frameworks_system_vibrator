@@ -76,12 +76,12 @@ enum {
  * @amplitudes: the amplitudes array
  */
 
-typedef struct {
+begin_packed_struct typedef struct {
     int8_t repeat;
     uint8_t length;
-    uint32_t timings[WAVEFORM_MAXNUM];
     uint8_t amplitudes[WAVEFORM_MAXNUM];
-} vibrator_waveform_t;
+    uint32_t timings[WAVEFORM_MAXNUM];
+} vibrator_waveform_t end_packed_struct;
 
 /* struct vibrator_effect_t
  * @effect_id: the id of effect
@@ -89,14 +89,14 @@ typedef struct {
  * @play_length: returned effect play length
  */
 
-typedef struct {
-    int effect_id;
+begin_packed_struct typedef struct {
+    int32_t effect_id;
+    int32_t play_length;
     union {
-        vibrator_effect_strength_e es;
+        uint8_t es;
         float amplitude;
     };
-    int32_t play_length;
-} vibrator_effect_t;
+} vibrator_effect_t end_packed_struct;
 
 /* struct vibrator_msg_t
  * @type: vibrator of type
@@ -109,19 +109,19 @@ typedef struct {
  * @capabilities: the capabilities of vibrator
  */
 
-typedef struct {
-    int result;
+begin_packed_struct typedef struct {
+    int32_t result;
     uint8_t type;
     uint8_t request_len;
     uint8_t response_len;
     union {
-        vibrator_effect_t effect;
-        vibrator_waveform_t wave;
-        vibrator_intensity_e intensity;
+        uint8_t intensity;
+        uint8_t amplitude;
         uint32_t timeoutms;
         int32_t capabilities;
-        uint8_t amplitude;
+        vibrator_waveform_t wave;
+        vibrator_effect_t effect;
     };
-} vibrator_msg_t;
+} vibrator_msg_t end_packed_struct;
 
 #endif /* #define __INCLUDE_VIBRATOR_H */
