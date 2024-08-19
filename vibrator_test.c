@@ -49,6 +49,19 @@ struct vibrator_test_s {
     int repeat;
 };
 
+enum vibrator_test_apino_e {
+    VIBRATOR_TEST_OENSHOT = 1,
+    VIBRATOR_TEST_WAVEFORM,
+    VIBRATOR_TEST_PREDEFINED,
+    VIBRATOR_TEST_PRIMITIVE,
+    VIBRATOR_TEST_SETAMPLITUDE,
+    VIBRATOR_TEST_START,
+    VIBRATOR_TEST_CANCEL,
+    VIBRATOR_TEST_GETCAPABILITIES,
+    VIBRATOR_TEST_SETINTENSITY,
+    VIBRATOR_TEST_GETINTENSITY,
+};
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -65,7 +78,7 @@ static void usage(void)
            "\t[-e <val> ] Effect id, default: 5\n"
            "\t[-r <val> ] The index into the timings array at which to repeat,\n"
            "\t            -1 means no repeat, default: -1\n"
-           "\t[-i <val> ] The intensity of vibration, default: 2\n");
+           "\t[-i <val> ] The intensity of vibration[0,3], default: 2\n");
 }
 
 static int test_play_predefined(uint8_t id)
@@ -74,7 +87,7 @@ static int test_play_predefined(uint8_t id)
     int ret;
 
     ret = vibrator_play_predefined(id, VIBRATION_STRONG, &play_length_ms);
-    printf("Effect play length: %d\n", play_length_ms);
+    printf("Effect(with strength) play length: %d\n", play_length_ms);
     return ret;
 }
 
@@ -87,14 +100,28 @@ static int test_paly_waveform(int repeat)
     return vibrator_play_waveform(timings, amplitudes, repeat, length);
 }
 
+static int test_play_primitive(uint8_t id, uint8_t amplitude)
+{
+    int play_length_ms;
+    int ret;
+
+    float amplitude_f = (float)amplitude / 255.0;
+
+    ret = vibrator_play_primitive(id, amplitude_f, &play_length_ms);
+    printf("Effect(with amplitude) play length: %d\n", play_length_ms);
+    return ret;
+}
+
 static int test_get_intensity(void)
 {
     vibrator_intensity_e intensity;
+    int ret;
 
-    intensity = vibrator_get_intensity();
+    ret = vibrator_get_intensity(&intensity);
+    if (ret >= 0)
+        printf("vibrator server reporting current intensity: %d\n", intensity);
 
-    printf("vibrator server reporting current intensity: %d\n", intensity);
-    return intensity;
+    return ret;
 }
 
 static int test_get_capabilities(void)
@@ -172,7 +199,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
     int ret;
 
     switch (test_data->api) {
-    case 1:
+    case VIBRATOR_TEST_OENSHOT:
         printf("API TEST: vibrator_play_oneshot\n");
         ret = vibrator_play_oneshot(test_data->time, test_data->amplitude);
         if (ret < 0) {
@@ -180,7 +207,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
             return ret;
         }
         break;
-    case 2:
+    case VIBRATOR_TEST_WAVEFORM:
         printf("API TEST: vibrator_play_waveform\n");
         ret = test_paly_waveform(test_data->repeat);
         if (ret < 0) {
@@ -188,7 +215,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
             return ret;
         }
         break;
-    case 3:
+    case VIBRATOR_TEST_PREDEFINED:
         printf("API TEST: vibrator_play_predefined\n");
         ret = test_play_predefined(test_data->effectid);
         if (ret < 0) {
@@ -196,7 +223,15 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
             return ret;
         }
         break;
-    case 4:
+    case VIBRATOR_TEST_PRIMITIVE:
+        printf("API TEST: test_play_primitive\n");
+        ret = test_play_primitive(test_data->effectid, test_data->amplitude);
+        if (ret < 0) {
+            printf("play_predefined failed: %d\n", ret);
+            return ret;
+        }
+        break;
+    case VIBRATOR_TEST_SETAMPLITUDE:
         printf("API TEST: vibrator_set_amplitude\n");
         ret = vibrator_set_amplitude(test_data->amplitude);
         if (ret < 0) {
@@ -204,7 +239,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
             return ret;
         }
         break;
-    case 5:
+    case VIBRATOR_TEST_START:
         printf("API TEST: vibrator_start\n");
         ret = vibrator_start(test_data->time);
         if (ret < 0) {
@@ -212,7 +247,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
             return ret;
         }
         break;
-    case 6:
+    case VIBRATOR_TEST_CANCEL:
         printf("API TEST: vibrator_cancel\n");
         ret = vibrator_cancel();
         if (ret < 0) {
@@ -220,7 +255,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
             return ret;
         }
         break;
-    case 7:
+    case VIBRATOR_TEST_GETCAPABILITIES:
         printf("API TEST: vibrator_get_capabilities\n");
         ret = test_get_capabilities();
         if (ret < 0) {
@@ -228,7 +263,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
             return ret;
         }
         break;
-    case 8:
+    case VIBRATOR_TEST_SETINTENSITY:
         printf("API TEST: vibrator_set_intensity\n");
         ret = vibrator_set_intensity(test_data->intensity);
         if (ret < 0) {
@@ -236,7 +271,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
             return ret;
         }
         break;
-    case 9:
+    case VIBRATOR_TEST_GETINTENSITY:
         printf("API TEST: vibrator_get_intensity\n");
         ret = test_get_intensity();
         if (ret < 0) {

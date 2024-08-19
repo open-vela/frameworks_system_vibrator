@@ -303,6 +303,38 @@ static int play_effect(ff_dev_t* ff_dev, int effect_id,
 }
 
 /****************************************************************************
+ * Name: play_primitive()
+ *
+ * Description:
+ *    play the predefined effect with the specified amplitude.
+ *
+ * Input Parameters:
+ *   ff_dev - structure for operating the ff device driver
+ *   effect_id - ID of the predefined effect will be played.
+ *   amplitude - effect amplitude(0-1.0).
+ *   play_length_ms - the playing length in ms unit which will be returned to
+ *                    VibratorService if the request is playing a predefined
+ *                    effect.
+ *
+ * Returned Value:
+ *   return the ret of ff_play
+ *
+ ****************************************************************************/
+
+static int play_primitive(ff_dev_t* ff_dev, int effect_id,
+    float amplitude, long* play_length_ms)
+{
+    int tmp;
+
+    tmp = (uint8_t)(amplitude * VIBRATOR_MAX_AMPLITUDE);
+    ff_dev->curr_magnitude = tmp * (VIBRATOR_STRONG_MAGNITUDE - VIBRATOR_LIGHT_MAGNITUDE) / 255;
+    ff_dev->curr_magnitude += VIBRATOR_LIGHT_MAGNITUDE;
+
+    return ff_play(ff_dev, effect_id, VIBRATOR_INVALID_VALUE,
+        play_length_ms);
+}
+
+/****************************************************************************
  * Name: on()
  *
  * Description:
@@ -672,6 +704,37 @@ static int receive_predefined(ff_dev_t* ff_dev, vibrator_effect_t* eff)
 }
 
 /****************************************************************************
+ * Name: receive_primitive()
+ *
+ * Description:
+ *   receive play primitive from vibrator_upper file
+ *
+ * Input Parameters:
+ *   ff_dev - structure for operating the ff device driver
+ *   eff - effect struct, including effect id and effect strength
+ *
+ * Returned Value:
+ *   return the play_effect value
+ *
+ ****************************************************************************/
+
+static int receive_primitive(ff_dev_t* ff_dev, vibrator_effect_t* eff)
+{
+    int32_t play_length;
+    int ret;
+
+    if (!should_vibrate(ff_dev->intensity))
+        return -ENOTSUP;
+
+    ret = play_primitive(ff_dev, eff->effect_id, eff->amplitude, (long*)&play_length);
+
+    if (ret >= 0)
+        eff->play_length = play_length;
+
+    return ret;
+}
+
+/****************************************************************************
  * Name: receive_set_intensity()
  *
  * Description:
@@ -787,7 +850,7 @@ static int vibrator_init(ff_dev_t* ff_dev)
 
     ff_dev->curr_app_id = VIBRATOR_INVALID_VALUE;
     ff_dev->curr_magnitude = VIBRATOR_STRONG_MAGNITUDE;
-    ff_dev->intensity = VIBRATION_INTENSITY_OFF;
+    ff_dev->intensity = VIBRATION_INTENSITY_MEDIUM;
     ff_dev->curr_amplitude = VIBRATOR_MAX_AMPLITUDE;
     ff_dev->capabilities = 0;
 
@@ -887,6 +950,12 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
         VIBRATORINFO("receive start ret = %d", ret);
         break;
     }
+    case VIBRATION_PRIMITIVE: {
+        thread_args->forcestop = true;
+        ret = receive_primitive(ff_dev, &msg->effect);
+        VIBRATORINFO("receive primitive ret = %d", ret);
+        break;
+    }
     case VIBRATION_SET_INTENSITY: {
         ret = receive_set_intensity(ff_dev, msg->intensity);
         VIBRATORINFO("receive set intensity = %d", ret);
@@ -904,7 +973,7 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     }
     case VIBRATION_GET_CAPABLITY: {
         ret = receive_get_capabilities(ff_dev, &msg->capabilities);
-        VIBRATORINFO("receive get capabilities = %ld", msg->capabilities);
+        VIBRATORINFO("receive get capabilities = %d", (int)msg->capabilities);
         break;
     }
     default: {
