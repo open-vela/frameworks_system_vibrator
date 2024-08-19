@@ -204,6 +204,9 @@ int vibrator_play_waveform(uint32_t timings[], uint8_t amplitudes[],
     vibrator_waveform_t wave;
     vibrator_msg_t buffer;
 
+    if (repeat < -1 || repeat >= length)
+        return -EINVAL;
+
     wave.length = length;
     wave.repeat = repeat;
     memcpy(wave.timings, timings, sizeof(uint32_t) * length);
@@ -259,6 +262,9 @@ int vibrator_play_predefined(uint8_t effect_id, vibrator_effect_strength_e es,
 {
     vibrator_msg_t buffer;
     int ret;
+
+    if (es < VIBRATION_LIGHT || es > VIBRATION_STRONG)
+        return -EINVAL;
 
     buffer.type = VIBRATION_EFFECT;
     buffer.effect.effect_id = effect_id;
@@ -359,6 +365,9 @@ int vibrator_get_intensity(vibrator_intensity_e* intensity)
 int vibrator_set_intensity(vibrator_intensity_e intensity)
 {
     vibrator_msg_t buffer;
+
+    if (intensity < VIBRATION_INTENSITY_LOW || intensity > VIBRATION_INTENSITY_OFF)
+        return -EINVAL;
 
     buffer.type = VIBRATION_SET_INTENSITY;
     buffer.intensity = intensity;

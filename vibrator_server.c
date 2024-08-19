@@ -431,6 +431,37 @@ static bool should_vibrate(vibrator_intensity_e intensity)
 }
 
 /****************************************************************************
+ * Name: should_repeat()
+ *
+ * Description:
+ *    confirm whether waveform repeat is allowed.
+ *
+ * Input Parameters:
+ *   repeat - the index into the timings array at which to repeat
+ *   timings - motor vibration time
+ *   len - length of timings array
+ *
+ * Returned Value:
+ *   true: allowed, false: not allowed
+ *
+ ****************************************************************************/
+
+static bool should_repeat(int repeat, uint32_t timings[], uint8_t len)
+{
+    int ret = false;
+
+    while (repeat < len) {
+        if (timings[repeat] != 0) {
+            ret = true;
+            break;
+        }
+        repeat++;
+    }
+
+    return ret;
+}
+
+/****************************************************************************
  * Name: receive_stop()
  *
  * Description:
@@ -625,6 +656,9 @@ static void* receive_waveform_thread(void* args)
 
     if (!should_vibrate(ff_dev->intensity))
         return NULL;
+
+    if (!should_repeat(wave.repeat, wave.timings, wave.length))
+        wave.repeat = -1;
 
     while (1) {
         pthread_mutex_lock(&thread_args->mutex);
