@@ -80,6 +80,7 @@ typedef struct {
     pthread_mutex_t mutex;
     pthread_cond_t condition;
     vibrator_msg_t msg;
+    uv_timer_t timer;
     ff_dev_t* ff_dev;
 } threadargs;
 
@@ -700,6 +701,54 @@ static void* receive_waveform_thread(void* args)
 }
 
 /****************************************************************************
+ * Name: interval_timer_cb()
+ *
+ * Description:
+ *   callback function to wait for a given time interval
+ *
+ * Input Parameters:
+ *   timer - the handle of the uv timer
+ *
+ ****************************************************************************/
+
+static void interval_timer_cb(uv_timer_t* timer)
+{
+    threadargs* thread_args = (threadargs*)timer->data;
+    vibrator_waveform_t* wave = &thread_args->wave;
+    ff_dev_t* ff_dev = thread_args->ff_dev;
+    int32_t duration = wave->timings[0];
+    int32_t interval = wave->timings[1];
+
+    if (wave->count-- == 0) {
+        uv_timer_stop(timer);
+        return;
+    }
+
+    VIBRATORINFO("%s: call on, duration %d, interval %d, count %d",
+        __func__, duration, interval, wave->count);
+    on(ff_dev, duration);
+}
+
+/****************************************************************************
+ * Name: receive_interval()
+ *
+ * Description:
+ *   receive receive_interval from vibrator_upper file
+ *
+ * Input Parameters:
+ *   args - the args of threadargs
+ *
+ ****************************************************************************/
+
+static int receive_interval(void* args)
+{
+    threadargs* thread_args = (threadargs*)args;
+
+    return uv_timer_start(&thread_args->timer, interval_timer_cb, 0,
+        thread_args->wave.timings[0] + thread_args->wave.timings[1]);
+}
+
+/****************************************************************************
  * Name: receive_predefined()
  *
  * Description:
@@ -928,6 +977,7 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     pthread_t vibra_thread;
     threadargs* thread_args;
     ff_dev_t* ff_dev;
+    uv_timer_t* timer;
     int ret;
 
     if (args == NULL) {
@@ -940,9 +990,11 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
 
     thread_args = (threadargs*)args;
     ff_dev = thread_args->ff_dev;
+    timer = &thread_args->timer;
 
     switch (msg->type) {
     case VIBRATION_WAVEFORM: {
+        uv_timer_stop(timer);
         pthread_mutex_lock(&thread_args->mutex);
         if (thread_args->forcestop == false) {
             thread_args->forcestop = true;
@@ -959,26 +1011,38 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
         ret = pthread_create(&vibra_thread, &vibattr, receive_waveform_thread, thread_args);
         break;
     }
+    case VIBRATION_INTERVAL: {
+        thread_args->forcestop = true;
+        uv_timer_stop(timer);
+        thread_args->wave = msg->wave;
+        ret = receive_interval(thread_args);
+        VIBRATORINFO("receive interval ret = %d", ret);
+        break;
+    }
     case VIBRATION_EFFECT: {
         thread_args->forcestop = true;
+        uv_timer_stop(timer);
         ret = receive_predefined(ff_dev, &msg->effect);
         VIBRATORINFO("receive predefined ret = %d", ret);
         break;
     }
     case VIBRATION_STOP: {
         thread_args->forcestop = true;
+        uv_timer_stop(timer);
         ret = receive_stop(ff_dev);
         VIBRATORINFO("receive stop ret = %d", ret);
         break;
     }
     case VIBRATION_START: {
         thread_args->forcestop = true;
+        uv_timer_stop(timer);
         ret = receive_start(ff_dev, msg->timeoutms);
         VIBRATORINFO("receive start ret = %d", ret);
         break;
     }
     case VIBRATION_PRIMITIVE: {
         thread_args->forcestop = true;
+        uv_timer_stop(timer);
         ret = receive_primitive(ff_dev, &msg->effect);
         VIBRATORINFO("receive primitive ret = %d", ret);
         break;
@@ -1121,6 +1185,7 @@ int main(int argc, char* argv[])
     thread_args.mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     thread_args.condition = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
     thread_args.ff_dev = &ff_dev;
+    thread_args.timer.data = &thread_args;
 
     for (int i = 0; i < VIBRATOR_COUNT; i++) {
         server_context[i].thread_args = &thread_args;
@@ -1152,6 +1217,8 @@ int main(int argc, char* argv[])
             goto errout;
         }
     }
+
+    uv_timer_init(uv_default_loop(), &thread_args.timer);
 
     ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
     if (ret < 0) {

@@ -51,6 +51,7 @@ static void vibrator_msg_packet(vibrator_msg_t* buffer)
 {
     switch (buffer->type) {
     case VIBRATION_WAVEFORM:
+    case VIBRATION_INTERVAL:
         buffer->request_len = VIBRATOR_MSG_HEADER + sizeof(vibrator_waveform_t);
         buffer->response_len = VIBRATOR_MSG_RESULT;
         break;
@@ -214,6 +215,39 @@ int vibrator_play_waveform(uint32_t timings[], uint8_t amplitudes[],
 
     buffer.type = VIBRATION_WAVEFORM;
     buffer.wave = wave;
+
+    return vibrator_commit(&buffer);
+}
+
+/****************************************************************************
+ * Name: vibrator_play_interval()
+ *
+ * Description:
+ *   play a interval vibration with specified duration and interval
+ *
+ * Input Parameters:
+ *   duration - the duration of vibration.
+ *   interval - the time interval between two vibration.
+ *   count - the times of vibration.
+ *
+ * Returned Value:
+ *   returns the flag that the vibrator playing waveform, greater than or
+ *   equal to 0 means success, otherwise it means failure
+ *
+ ****************************************************************************/
+
+int vibrator_play_interval(int32_t duration, int32_t interval,
+    int16_t count)
+{
+    vibrator_msg_t buffer;
+
+    if (duration <= 0 || interval < 0 || count < 0)
+        return -EINVAL;
+
+    buffer.type = VIBRATION_INTERVAL;
+    buffer.wave.timings[0] = duration;
+    buffer.wave.timings[1] = interval;
+    buffer.wave.count = count;
 
     return vibrator_commit(&buffer);
 }
