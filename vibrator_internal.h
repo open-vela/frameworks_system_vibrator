@@ -63,6 +63,7 @@ enum {
     VIBRATION_START,
     VIBRATION_STOP,
     VIBRATION_PRIMITIVE,
+    VIBRATION_INTERVAL,
     VIBRATION_SET_AMPLITUDE,
     VIBRATION_GET_CAPABLITY,
     VIBRATION_SET_INTENSITY,
@@ -79,6 +80,7 @@ enum {
 begin_packed_struct typedef struct {
     int8_t repeat;
     uint8_t length;
+    int16_t count;
     uint8_t amplitudes[WAVEFORM_MAXNUM];
     uint32_t timings[WAVEFORM_MAXNUM];
 } vibrator_waveform_t end_packed_struct;

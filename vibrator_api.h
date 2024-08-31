@@ -101,6 +101,26 @@ int vibrator_play_waveform(uint32_t timings[], uint8_t amplitudes[],
     int8_t repeat, uint8_t length);
 
 /****************************************************************************
+ * Name: vibrator_play_interval()
+ *
+ * Description:
+ *   play a interval vibration with specified duration and interval
+ *
+ * Input Parameters:
+ *   duration - the duration of vibration.
+ *   interval - the time interval between two vibration.
+ *   count - the times of vibration.
+ *
+ * Returned Value:
+ *   returns the flag that the vibrator playing waveform, greater than or
+ *   equal to 0 means success, otherwise it means failure
+ *
+ ****************************************************************************/
+
+int vibrator_play_interval(int32_t duration, int32_t interval,
+    int16_t count);
+
+/****************************************************************************
  * Name: vibrator_play_oneshot()
  *
  * Description:
