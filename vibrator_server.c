@@ -34,6 +34,8 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include <unistd.h>
+#include <uv.h>
 
 #include <nuttx/input/ff.h>
 
@@ -62,14 +64,6 @@
  * Private Types
  ****************************************************************************/
 
-/* struct ff_dev_t
- * @fd: file descriptor
- * @curr_app_id: the current effect id of vibrator device
- * @curr_magnitude: the current magnitude value of vibrator device
- * @curr_amplitude: the current amplitude value
- * @capabilities: the capabilities of vibrator device
- * @intensity: vibration intensity
- */
 typedef struct {
     int fd;
     int16_t curr_app_id;
@@ -79,22 +73,21 @@ typedef struct {
     vibrator_intensity_e intensity;
 } ff_dev_t;
 
-/* struct threadargs
- * @forcestop: force stop the vibration of waveform
- * @wave: the waveform_t of above structure
- * @mutex: the pthread_mutex_t of above structure
- * @condition: the pthread_cond_t of above structure
- * @ff_dev: structure for operating the ff device driver
- */
-
 typedef struct {
     bool forcestop;
     bool condition_is_met;
     vibrator_waveform_t wave;
     pthread_mutex_t mutex;
     pthread_cond_t condition;
+    vibrator_msg_t msg;
     ff_dev_t* ff_dev;
 } threadargs;
+
+typedef struct vibrator_context_s {
+    uv_poll_t poll_handle;
+    uv_os_sock_t sock;
+    threadargs* thread_args;
+} vibrator_context_t;
 
 /****************************************************************************
  * Private Functions
@@ -1019,14 +1012,77 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     return ret;
 }
 
+static void connection_close_cb(uv_handle_t* handle)
+{
+    vibrator_context_t* ctx = handle->data;
+    free(ctx);
+}
+
+static void connection_poll_cb(uv_poll_t* handle, int status, int events)
+{
+    vibrator_context_t* ctx = handle->data;
+    vibrator_msg_t* msg = &ctx->thread_args->msg;
+
+    if (events & UV_READABLE) {
+        int ret = recv(ctx->sock, msg, sizeof(vibrator_msg_t), 0);
+        if (ret >= msg->request_len) {
+            VIBRATORINFO("recv client: recv len = %d, type = %d", ret, msg->type);
+            msg->result = vibrator_mode_select(msg, ctx->thread_args);
+            ret = send(ctx->sock, msg, msg->response_len, 0);
+            if (ret < 0) {
+                VIBRATORERR("send fail, errno = %d", errno);
+            }
+        }
+    }
+
+    if (events & UV_DISCONNECT) {
+        VIBRATORINFO("client disconnect");
+        uv_poll_stop(handle);
+        close(ctx->sock);
+        uv_close((uv_handle_t*)&ctx->poll_handle, connection_close_cb);
+    }
+}
+
+static void server_poll_cb(uv_poll_t* handle, int status, int events)
+{
+    vibrator_context_t* server_ctx = handle->data;
+    vibrator_context_t* client_ctx;
+    uv_os_sock_t client_fd;
+
+    client_fd = accept(server_ctx->sock, NULL, NULL);
+    if (client_fd < 0) {
+        VIBRATORERR("accept failed %d: %d", client_fd, errno);
+        return;
+    }
+
+    client_ctx = malloc(sizeof *client_ctx);
+    int ret = uv_poll_init_socket(uv_default_loop(), &client_ctx->poll_handle, client_fd);
+    if (ret < 0) {
+        VIBRATORERR("uv poll init socket failed: %d\n", ret);
+        close(client_fd);
+        free(client_ctx);
+        return;
+    }
+
+    client_ctx->sock = client_fd;
+    client_ctx->thread_args = server_ctx->thread_args;
+    client_ctx->poll_handle.data = client_ctx;
+    ret = uv_poll_start(&client_ctx->poll_handle, UV_READABLE | UV_DISCONNECT,
+        connection_poll_cb);
+    if (ret < 0) {
+        VIBRATORERR("uv poll start socket failed: %d\n", ret);
+        close(client_fd);
+        free(client_ctx);
+        return;
+    }
+}
+
 int main(int argc, char* argv[])
 {
-    int ret;
-    vibrator_msg_t msg;
-    ff_dev_t ff_dev;
+    vibrator_context_t server_context[VIBRATOR_COUNT];
     threadargs thread_args;
-    int sock_fd[VIBRATOR_COUNT];
-    struct pollfd pfd[VIBRATOR_COUNT];
+    ff_dev_t ff_dev;
+    int ret;
 
     const int family[] = {
         [VIBRATOR_LOCAL] = AF_UNIX,
@@ -1066,72 +1122,46 @@ int main(int argc, char* argv[])
     thread_args.condition = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
     thread_args.ff_dev = &ff_dev;
 
-    memset(sock_fd, 0, sizeof(sock_fd));
     for (int i = 0; i < VIBRATOR_COUNT; i++) {
-        sock_fd[i] = socket(family[i], SOCK_STREAM | SOCK_NONBLOCK, 0);
-        if (sock_fd[i] < 0) {
+        server_context[i].thread_args = &thread_args;
+
+        server_context[i].sock = socket(family[i], SOCK_STREAM | SOCK_NONBLOCK, 0);
+        if (server_context[i].sock < 0) {
             VIBRATORERR("socket failure %d: %d", i, errno);
             continue;
         }
 
-        ret = bind(sock_fd[i], addr[i], addrlen[i]);
+        ret = bind(server_context[i].sock, addr[i], addrlen[i]);
         if (ret < 0) {
             goto errout;
         }
 
-        ret = listen(sock_fd[i], VIBRATOR_MAX_CLIENTS);
+        ret = uv_poll_init_socket(uv_default_loop(), &server_context[i].poll_handle, server_context[i].sock);
+        if (ret < 0) {
+            goto errout;
+        }
+        server_context[i].poll_handle.data = &server_context[i];
+
+        ret = listen(server_context[i].sock, VIBRATOR_MAX_CLIENTS);
+        if (ret < 0) {
+            goto errout;
+        }
+
+        ret = uv_poll_start(&server_context[i].poll_handle, UV_READABLE, server_poll_cb);
         if (ret < 0) {
             goto errout;
         }
     }
 
-    memset(pfd, 0, sizeof(pfd));
-    for (int i = 0; i < VIBRATOR_COUNT; i++) {
-        pfd[i].fd = sock_fd[i];
-        pfd[i].events = POLLIN;
-    }
-
-    while (1) {
-        ret = poll(pfd, VIBRATOR_COUNT, -1);
-        if (ret < 0) {
-            if (errno == EINTR)
-                continue;
-            VIBRATORERR("poll failed, errno = %d", errno);
-            break;
-        }
-
-        for (int i = 0; i < VIBRATOR_COUNT; i++) {
-            if (pfd[i].revents & POLLIN) {
-                int client_fd = accept(sock_fd[i], NULL, NULL);
-                if (client_fd < 0) {
-                    VIBRATORERR("accept failed %d: %d", i, errno);
-                    continue;
-                }
-
-                memset(&msg, 0, sizeof(vibrator_msg_t));
-                ret = recv(client_fd, &msg, sizeof(vibrator_msg_t), 0);
-                if (ret < msg.request_len) {
-                    VIBRATORERR("recv failed %d: %d", i, errno);
-                } else {
-                    thread_args.forcestop = true;
-                    VIBRATORINFO("recv client: recv len = %d, type = %d", ret, msg.type);
-                    ret = vibrator_mode_select(&msg, &thread_args);
-                    msg.result = ret;
-                    ret = send(client_fd, &msg, msg.response_len, 0);
-                    if (ret < 0) {
-                        VIBRATORERR("send fail, errno = %d", errno);
-                    }
-                }
-
-                close(client_fd);
-            }
-        }
+    ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+    if (ret < 0) {
+        VIBRATORERR("uv_run failed: %d", ret);
     }
 
 errout:
     for (int i = 0; i < VIBRATOR_COUNT; i++) {
-        if (sock_fd[i] > 0) {
-            close(sock_fd[i]);
+        if (server_context[i].sock > 0) {
+            close(server_context[i].sock);
         }
     }
 
