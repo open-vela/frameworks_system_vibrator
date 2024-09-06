@@ -858,7 +858,7 @@ static int receive_get_intensity(ff_dev_t* ff_dev,
     vibrator_intensity_e* intensity)
 {
     ff_dev->intensity = property_get_int32(KVDB_KEY_VIBRATOR_MODE,
-        VIBRATION_INTENSITY_MEDIUM);
+        ff_dev->intensity);
     *intensity = ff_dev->intensity;
     return OK;
 }
@@ -926,7 +926,7 @@ static int vibrator_init(ff_dev_t* ff_dev)
 
     ff_dev->curr_app_id = VIBRATOR_INVALID_VALUE;
     ff_dev->curr_magnitude = VIBRATOR_STRONG_MAGNITUDE;
-    ff_dev->intensity = VIBRATION_INTENSITY_MEDIUM;
+    ff_dev->intensity = VIBRATION_INTENSITY_OFF;
     ff_dev->curr_amplitude = VIBRATOR_MAX_AMPLITUDE;
     ff_dev->capabilities = 0;
 
@@ -955,7 +955,7 @@ static int vibrator_init(ff_dev_t* ff_dev)
     }
 
     ff_dev->intensity = property_get_int32(KVDB_KEY_VIBRATOR_MODE,
-        VIBRATION_INTENSITY_OFF);
+        ff_dev->intensity);
     return OK;
 }
 
