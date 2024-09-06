@@ -57,7 +57,8 @@ typedef enum {
 typedef enum {
     VIBRATION_LIGHT = 0,
     VIBRATION_MEDIUM = 1,
-    VIBRATION_STRONG = 2
+    VIBRATION_STRONG = 2,
+    VIBRATION_DEFAULTES = 3
 } vibrator_effect_strength_e;
 
 /* Vibration intensity */

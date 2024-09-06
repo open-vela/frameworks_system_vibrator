@@ -297,7 +297,7 @@ int vibrator_play_predefined(uint8_t effect_id, vibrator_effect_strength_e es,
     vibrator_msg_t buffer;
     int ret;
 
-    if (es < VIBRATION_LIGHT || es > VIBRATION_STRONG)
+    if (es < VIBRATION_LIGHT || es > VIBRATION_DEFAULTES)
         return -EINVAL;
 
     buffer.type = VIBRATION_EFFECT;
