@@ -288,7 +288,7 @@ static int play_effect(ff_dev_t* ff_dev, int effect_id,
         break;
     }
     default: {
-        return -EINVAL;
+        break;
     }
     }
 
