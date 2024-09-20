@@ -717,16 +717,13 @@ static void interval_timer_cb(uv_timer_t* timer)
     vibrator_waveform_t* wave = &thread_args->wave;
     ff_dev_t* ff_dev = thread_args->ff_dev;
     int32_t duration = wave->timings[0];
-    int32_t interval = wave->timings[1];
 
     if (wave->count-- == 0) {
         uv_timer_stop(timer);
         return;
     }
 
-    VIBRATORINFO("%s: call on, duration %d, interval %d, count %d",
-        __func__, duration, interval, wave->count);
-    on(ff_dev, duration);
+    receive_start(ff_dev, duration);
 }
 
 /****************************************************************************
