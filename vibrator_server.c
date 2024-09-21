@@ -24,7 +24,6 @@
 #include <mqueue.h>
 #include <netpacket/rpmsg.h>
 #include <poll.h>
-#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -74,11 +73,7 @@ typedef struct {
 } ff_dev_t;
 
 typedef struct {
-    bool forcestop;
-    bool condition_is_met;
     vibrator_waveform_t wave;
-    pthread_mutex_t mutex;
-    pthread_cond_t condition;
     vibrator_msg_t msg;
     uv_timer_t timer;
     ff_dev_t* ff_dev;
@@ -440,12 +435,16 @@ static bool should_vibrate(vibrator_intensity_e intensity)
  *
  ****************************************************************************/
 
-static bool should_repeat(int repeat, uint32_t timings[], uint8_t len)
+static bool should_repeat(int repeat, uint32_t timings[],
+    uint8_t amplitude[], uint8_t len)
 {
     int ret = false;
 
+    if (repeat < 0)
+        return ret;
+
     while (repeat < len) {
-        if (timings[repeat] != 0) {
+        if (timings[repeat] != 0 && amplitude[repeat] > 0) {
             ret = true;
             break;
         }
@@ -512,121 +511,45 @@ static int receive_start(ff_dev_t* ff_dev, uint32_t timeoutms)
 }
 
 /****************************************************************************
- * Name: get_total_on_duration()
+ * Name: waveform_timer_cb()
  *
  * Description:
- *   calculate the time when the continuous amplitude value of
- *   the elements in the array is not 0
+ *   callback function to wait for a given vibration time
  *
  * Input Parameters:
- *   timings - motor vibration time
- *   amplitudes - motor of amplitudes
- *   start_index - starting subscript
- *   repeat_index - cyclic repeat subscript
- *   len - length of timings and amplitudes array
- *
- * Returned Value:
- *   return the on_duration time
+ *   timer - the handle of the uv timer
  *
  ****************************************************************************/
 
-static int32_t get_total_on_duration(uint32_t timings[], uint8_t amplitudes[],
-    uint8_t start_index, int8_t repeat_index, uint8_t len)
+static void waveform_timer_cb(uv_timer_t* timer)
 {
-    uint8_t i = start_index;
-    uint32_t timing = 0;
+    threadargs* thread_args = timer->data;
+    vibrator_waveform_t* wave = &thread_args->wave;
+    ff_dev_t* ff_dev = thread_args->ff_dev;
+    uint16_t duration;
+    uint8_t amplitude;
 
-    while (amplitudes[i] != 0) {
-        timing += timings[i++];
-        if (i >= len) {
-            if (repeat_index >= 0) {
-                i = repeat_index;
-                repeat_index = -1;
-            } else {
-                break;
-            }
+    uv_timer_stop(timer);
+
+    if (wave->count < wave->length) {
+        VIBRATORINFO("index(count) = %d", wave->count);
+        amplitude = scale(wave->amplitudes[wave->count], ff_dev->intensity);
+        duration = wave->timings[wave->count++];
+        if (amplitude != 0 && duration > 0) {
+            on(ff_dev, duration);
+            ff_set_amplitude(ff_dev, amplitude);
         }
-        if (i == start_index) {
-            return 1000;
-        }
+        uv_timer_start(&thread_args->timer, waveform_timer_cb, duration, 0);
+    } else if (wave->repeat < 0) {
+        VIBRATORINFO("repeat < 0, play waveform exit");
+    } else {
+        wave->count = wave->repeat;
+        uv_timer_start(&thread_args->timer, waveform_timer_cb, 0, 0);
     }
-    return timing;
 }
 
 /****************************************************************************
- * Name: custom_wait()
- *
- * Description:
- *   used to wait for a given time interval
- *
- * Input Parameters:
- *   milliseconds - milliseconds to wait
- *
- ****************************************************************************/
-
-static void custom_wait(uint32_t milliseconds)
-{
-    struct timespec ts;
-    ts.tv_sec = milliseconds / 1000;
-    ts.tv_nsec = (milliseconds % 1000) * 1000000;
-    nanosleep(&ts, NULL);
-}
-
-/****************************************************************************
- * Name: time_millis()
- *
- * Description:
- *   get the current time in milliseconds
- *
- * Returned Value:
- *   return the current time in milliseconds
- *
- ****************************************************************************/
-
-static uint32_t time_millis(void)
-{
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return now.tv_sec * 1000 + now.tv_nsec / 1000000;
-}
-
-/****************************************************************************
- * Name: delay_locked()
- *
- * Description:
- *   blocks program execution for a period of time
- *
- * Input Parameters:
- *   forcestop - force stop vibration flag
- *   duration - blocks program execution for a period of time
- *
- * Returned Value:
- *   returns the actual waiting time
- *
- ****************************************************************************/
-
-static uint32_t delay_locked(bool forcestop, int32_t duration)
-{
-    int32_t duration_remaining = duration;
-
-    if (duration > 0) {
-        uint32_t bedtime = duration + time_millis();
-        do {
-            custom_wait(duration_remaining);
-            if (forcestop) {
-                break;
-            }
-            duration_remaining = bedtime - time_millis();
-        } while (duration_remaining > 0);
-
-        return duration - duration_remaining;
-    }
-
-    return 0;
-}
-
-/****************************************************************************
- * Name: receive_waveform_thread()
+ * Name: receive_waveform()
  *
  * Description:
  *   receive waveform from vibrator_upper file
@@ -636,68 +559,21 @@ static uint32_t delay_locked(bool forcestop, int32_t duration)
  *
  ****************************************************************************/
 
-static void* receive_waveform_thread(void* args)
+static int receive_waveform(void* args)
 {
-    threadargs* thread_args = (threadargs*)args;
-    vibrator_waveform_t wave = thread_args->wave;
-    ff_dev_t* ff_dev = thread_args->ff_dev;
-    int32_t on_duration = 0;
-    uint8_t amplitude = 0;
-    int32_t duration = 0;
-    uint32_t wait_time;
-    bool forcestop;
-    int index = 0;
+    threadargs* thread_args = args;
+    vibrator_waveform_t* wave = &thread_args->wave;
 
-    if (!should_vibrate(ff_dev->intensity))
-        return NULL;
+    wave->count = 0;
 
-    if (!should_repeat(wave.repeat, wave.timings, wave.length))
-        wave.repeat = -1;
+    if (!should_vibrate(thread_args->ff_dev->intensity))
+        return -ENOTSUP;
 
-    while (1) {
-        pthread_mutex_lock(&thread_args->mutex);
-        forcestop = thread_args->forcestop;
-        if (thread_args->forcestop) {
-            pthread_mutex_unlock(&thread_args->mutex);
-            break;
-        }
-        pthread_mutex_unlock(&thread_args->mutex);
-        VIBRATORINFO("index = %d", index);
+    if (!should_repeat(wave->repeat, wave->timings,
+            wave->amplitudes, wave->length))
+        wave->repeat = -1;
 
-        if (index < wave.length) {
-            amplitude = scale(wave.amplitudes[index], ff_dev->intensity);
-            duration = wave.timings[index++];
-            if (duration <= 0) {
-                continue;
-            }
-            if (amplitude != 0) {
-                if (on_duration <= 0) {
-                    on_duration = get_total_on_duration(wave.timings, wave.amplitudes,
-                        index - 1, wave.repeat, wave.length);
-                    on(ff_dev, on_duration);
-                }
-                ff_set_amplitude(ff_dev, amplitude);
-            }
-            wait_time = delay_locked(forcestop, duration);
-            if (amplitude != 0) {
-                on_duration -= wait_time;
-            }
-        } else if (wave.repeat < 0) {
-            VIBRATORINFO("repeat < 0, play waveform exit");
-            break;
-        } else {
-            index = wave.repeat;
-        }
-    }
-
-    pthread_mutex_lock(&thread_args->mutex);
-    thread_args->condition_is_met = true;
-    pthread_mutex_unlock(&thread_args->mutex);
-    pthread_cond_signal(&thread_args->condition);
-
-    VIBRATORINFO("receive_waveform_thread exit");
-
-    return NULL;
+    return uv_timer_start(&thread_args->timer, waveform_timer_cb, 0, 0);
 }
 
 /****************************************************************************
@@ -970,8 +846,6 @@ static int vibrator_init(ff_dev_t* ff_dev)
 
 static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
 {
-    pthread_attr_t vibattr;
-    pthread_t vibra_thread;
     threadargs* thread_args;
     ff_dev_t* ff_dev;
     uv_timer_t* timer;
@@ -982,9 +856,6 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
         return -EINVAL;
     }
 
-    pthread_attr_init(&vibattr);
-    pthread_attr_setstacksize(&vibattr, CONFIG_VIBRATOR_STACKSIZE);
-
     thread_args = (threadargs*)args;
     ff_dev = thread_args->ff_dev;
     timer = &thread_args->timer;
@@ -992,24 +863,12 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     switch (msg->type) {
     case VIBRATION_WAVEFORM: {
         uv_timer_stop(timer);
-        pthread_mutex_lock(&thread_args->mutex);
-        if (thread_args->forcestop == false) {
-            thread_args->forcestop = true;
-            while (!thread_args->condition_is_met) {
-                pthread_cond_wait(&thread_args->condition, &thread_args->mutex);
-            }
-            thread_args->condition_is_met = false;
-            thread_args->forcestop = false;
-        } else {
-            thread_args->forcestop = false;
-        }
-        pthread_mutex_unlock(&thread_args->mutex);
         thread_args->wave = msg->wave;
-        ret = pthread_create(&vibra_thread, &vibattr, receive_waveform_thread, thread_args);
+        ret = receive_waveform(thread_args);
+        VIBRATORINFO("receive waveform ret = %d", ret);
         break;
     }
     case VIBRATION_INTERVAL: {
-        thread_args->forcestop = true;
         uv_timer_stop(timer);
         thread_args->wave = msg->wave;
         ret = receive_interval(thread_args);
@@ -1017,28 +876,24 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
         break;
     }
     case VIBRATION_EFFECT: {
-        thread_args->forcestop = true;
         uv_timer_stop(timer);
         ret = receive_predefined(ff_dev, &msg->effect);
         VIBRATORINFO("receive predefined ret = %d", ret);
         break;
     }
     case VIBRATION_STOP: {
-        thread_args->forcestop = true;
         uv_timer_stop(timer);
         ret = receive_stop(ff_dev);
         VIBRATORINFO("receive stop ret = %d", ret);
         break;
     }
     case VIBRATION_START: {
-        thread_args->forcestop = true;
         uv_timer_stop(timer);
         ret = receive_start(ff_dev, msg->timeoutms);
         VIBRATORINFO("receive start ret = %d", ret);
         break;
     }
     case VIBRATION_PRIMITIVE: {
-        thread_args->forcestop = true;
         uv_timer_stop(timer);
         ret = receive_primitive(ff_dev, &msg->effect);
         VIBRATORINFO("receive primitive ret = %d", ret);
@@ -1177,10 +1032,6 @@ int main(int argc, char* argv[])
         return ret;
     }
 
-    thread_args.forcestop = true;
-    thread_args.condition_is_met = false;
-    thread_args.mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-    thread_args.condition = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
     thread_args.ff_dev = &ff_dev;
     thread_args.timer.data = &thread_args;
 
