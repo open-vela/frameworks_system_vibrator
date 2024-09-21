@@ -15,7 +15,7 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Included Files
+ * @brief Included Files
  ****************************************************************************/
 
 #include <errno.h>
@@ -33,20 +33,16 @@
 #include "vibrator_internal.h"
 
 /****************************************************************************
- * Private Functions
+ * @brief Private Functions
  ****************************************************************************/
 
-/****************************************************************************
- * Name: vibrator_msg_packet()
+/**
+ * @brief Fill the vibrator message header
  *
- * Description:
- *   fill the vibrator message header using the type
+ * @details This function fills the vibrator message header using the specified type.
  *
- * Input Parameters:
- *   buffer - the buffer of the vibrator_msg_tS
- *
- ****************************************************************************/
-
+ * @param buffer The buffer of the vibrator_msg_tS.
+ */
 static void vibrator_msg_packet(vibrator_msg_t* buffer)
 {
     switch (buffer->type) {
@@ -91,20 +87,15 @@ static void vibrator_msg_packet(vibrator_msg_t* buffer)
     }
 }
 
-/****************************************************************************
- * Name: vibrator_commit()
+/**
+ * @brief Open message queue
  *
- * Description:
- *   open message queue
+ * @details This function opens the message queue for vibrator messages.
  *
- * Input Parameters:
- *   buffer - the type of the vibrator_msg_t
+ * @param buffer The type of the vibrator_msg_t.
  *
- * Returned Value:
- *   returns the flag that the vibration is send
- *
- ****************************************************************************/
-
+ * @return Returns a flag indicating whether the vibration is sent.
+ */
 static int vibrator_commit(vibrator_msg_t* buffer)
 {
     int fd;
@@ -164,10 +155,9 @@ errout:
 }
 
 /****************************************************************************
- * Public Functions
+ * @brief Public Functions
  *
- * Description:
- *   the file contains nine interfaces vibrator_play_waveform,
+ * @details This file contains nine interfaces vibrator_play_waveform,
  *   vibrator_play_oneshot, vibrator_play_predefined, vibrator_get_intensity,
  *   vibrator_set_intensity, vibrator_cancel, vibrator_start,
  *   vibrator_set_amplitude, and vibrator_get_capabilities
@@ -175,30 +165,20 @@ errout:
  *
  ****************************************************************************/
 
-/****************************************************************************
- * Name: vibrator_play_waveform()
+/**
+ * @brief Play a waveform vibration.
  *
- * Description:
- *   play a waveform vibration
- *
- * Input Parameters:
- *   timings - the pattern of alternating on-off timings, starting with off,
- *             timing values of 0 will cause the timing / amplitude pair to
- *             be ignored
- *   amplitudes - the amplitude values of the timing / amplitude pairs.
- *                Amplitude values must be between 0 and 255, or equal to
- *                DEFAULT_AMPLITUDE. An amplitude value of 0 implies the
- *                motor is off.
- *   repeat - the index into the timings array at which to repeat, or -1 if
- *            you you don't want to repeat.
- *   length - the length of timings and amplitudes pairs
- *
- * Returned Value:
- *   returns the flag that the vibrator playing waveform, greater than or
- *   equal to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @param timings The pattern of alternating on-off timings, starting with off.
+ *                Timing values of 0 will cause the timing/amplitude pair to be ignored.
+ * @param amplitudes The amplitude values of the timing/amplitude pairs.
+ *                   Amplitude values must be between 0 and 255, or equal to DEFAULT_AMPLITUDE.
+ *                   An amplitude value of 0 implies the motor is off.
+ * @param repeat The index into the timings array at which to repeat, or -1 if
+ *               you don't want to repeat.
+ * @param length The length of timings and amplitudes pairs.
+ * @return Returns the flag that the vibrator is playing waveform.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_play_waveform(uint32_t timings[], uint8_t amplitudes[],
     int8_t repeat, uint8_t length)
 {
@@ -219,23 +199,15 @@ int vibrator_play_waveform(uint32_t timings[], uint8_t amplitudes[],
     return vibrator_commit(&buffer);
 }
 
-/****************************************************************************
- * Name: vibrator_play_interval()
+/**
+ * @brief Play an interval vibration with specified duration and interval.
  *
- * Description:
- *   play a interval vibration with specified duration and interval
- *
- * Input Parameters:
- *   duration - the duration of vibration.
- *   interval - the time interval between two vibration.
- *   count - the times of vibration.
- *
- * Returned Value:
- *   returns the flag that the vibrator playing waveform, greater than or
- *   equal to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @param duration The duration of vibration.
+ * @param interval The time interval between two vibrations.
+ * @param count The number of vibrations.
+ * @return Returns the flag that the vibrator is playing interval.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_play_interval(int32_t duration, int32_t interval,
     int16_t count)
 {
@@ -252,45 +224,28 @@ int vibrator_play_interval(int32_t duration, int32_t interval,
     return vibrator_commit(&buffer);
 }
 
-/****************************************************************************
- * Name: vibrator_play_oneshot()
+/**
+ * @brief Play a one-shot vibration.
  *
- * Description:
- *   play a one shot vibration
- *
- * Input Parameters:
- *   timing - the number of milliseconds to vibrate, must be positive
- *   amplitude - the amplitude of vibration, must be a value between 1 and
- *               255, or DEFAULT_AMPLITUDE
- *
- * Returned Value:
- *   returns the flag that the vibrator playing oneshot, greater than or
- *   equal to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @param timing The number of milliseconds to vibrate. Must be positive.
+ * @param amplitude The amplitude of vibration; must be a value between 1 and 255, or DEFAULT_AMPLITUDE.
+ * @return Returns the flag that the vibrator is playing one shot.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_play_oneshot(uint32_t timing, uint8_t amplitude)
 {
     return vibrator_play_waveform(&timing, &amplitude, -1, 1);
 }
 
-/****************************************************************************
- * Name: vibrator_play_predefined()
+/**
+ * @brief Play a predefined vibration effect.
  *
- * Description:
- *   play a predefined vibration effect
- *
- * Input Parameters:
- *   effectid - the ID of the effect to perform
- *   es - vibration intensity
- *   play_length - returned effect play duration
- *
- * Returned Value:
- *   returns the flag that the vibrator playing predefined effect, greater
- *   than or equal to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @param effect_id The ID of the effect to perform.
+ * @param es The vibration intensity.
+ * @param play_length Returned effect play duration.
+ * @return Returns the flag that the vibrator is playing the predefined effect.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_play_predefined(uint8_t effect_id, vibrator_effect_strength_e es,
     int32_t* play_length)
 {
@@ -313,23 +268,15 @@ int vibrator_play_predefined(uint8_t effect_id, vibrator_effect_strength_e es,
     return ret;
 }
 
-/****************************************************************************
- * Name: vibrator_play_primitive()
+/**
+ * @brief Play a predefined vibration effect with the specified amplitude.
  *
- * Description:
- *   play a predefined vibration effect with specified amplitude
- *
- * Input Parameters:
- *   effectid - the ID of the effect to perform
- *   amplitude - vibration amplitude(0.0~1.0)
- *   play_length - returned effect play duration
- *
- * Returned Value:
- *   returns the flag that the vibrator playing predefined effect, greater
- *   than or equal to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @param effect_id The ID of the effect to perform.
+ * @param amplitude Vibration amplitude (0.0~1.0).
+ * @param play_length Returned effect play duration.
+ * @return Returns the flag that the vibrator is playing the predefined effect.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_play_primitive(uint8_t effect_id, float amplitude,
     int32_t* play_length)
 {
@@ -352,21 +299,13 @@ int vibrator_play_primitive(uint8_t effect_id, float amplitude,
     return ret;
 }
 
-/****************************************************************************
- * Name: vibrator_get_intensity()
+/**
+ * @brief Get vibration intensity.
  *
- * Description:
- *   get vibration intensity
- *
- * Input Parameters:
- *   intensity - buffer that store intensity
- *
- * Returned Value:
- *   returns the flag indicating get vibrator intensity, greater than or equal
- *   to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @param intensity Buffer that stores intensity.
+ * @return Returns the flag indicating success in getting vibrator intensity.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_get_intensity(vibrator_intensity_e* intensity)
 {
     vibrator_msg_t buffer;
@@ -381,21 +320,13 @@ int vibrator_get_intensity(vibrator_intensity_e* intensity)
     return ret;
 }
 
-/****************************************************************************
- * Name: vibrator_set_intensity()
+/**
+ * @brief Set vibration intensity.
  *
- * Description:
- *   set vibration intensity
- *
- * Input Parameters:
- *   intensity - the vibration intensity
- *
- * Returned Value:
- *   returns the flag indicating the intensity whether setting was successful,
- *   greater than or equal to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @param intensity The vibration intensity.
+ * @return Returns the flag indicating whether setting the intensity was successful.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_set_intensity(vibrator_intensity_e intensity)
 {
     vibrator_msg_t buffer;
@@ -409,18 +340,12 @@ int vibrator_set_intensity(vibrator_intensity_e intensity)
     return vibrator_commit(&buffer);
 }
 
-/****************************************************************************
- * Name: vibrator_cancel()
+/**
+ * @brief Cancel the vibration.
  *
- * Description:
- *   cancel the vibration
- *
- * Returned Value:
- *   returns the flag that the vibration is closed, greater than or equal
- *   to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @return Returns the flag that the vibration is stopped.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_cancel(void)
 {
     vibrator_msg_t buffer;
@@ -430,21 +355,13 @@ int vibrator_cancel(void)
     return vibrator_commit(&buffer);
 }
 
-/****************************************************************************
- * Name: vibrator_start()
+/**
+ * @brief Start the vibrator with vibrate time.
  *
- * Description:
- *   start the vibrator with vibrate time
- *
- * Input Parameters:
- *   timeoutms - number of milliseconds to vibrate
- *
- * Returned Value:
- *   returns the flag that the vibration start, greater than or equal
- *   to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @param timeoutms Number of milliseconds to vibrate.
+ * @return Returns the flag that the vibration has started.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_start(int32_t timeoutms)
 {
     vibrator_msg_t buffer;
@@ -455,22 +372,13 @@ int vibrator_start(int32_t timeoutms)
     return vibrator_commit(&buffer);
 }
 
-/****************************************************************************
- * Name: vibrator_set_amplitude()
+/**
+ * @brief Set vibration amplitude.
  *
- * Description:
- *   set vibration amplitude
- *
- * Input Parameters:
- *   amplitude - the amplitude of vibration, must be a value between 1 and
- *               255, or DEFAULT_AMPLITUDE
- *
- * Returned Value:
- *   returns the flag indicating set vibrator amplitude, greater than or equal
- *   to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @param amplitude The amplitude of vibration; must be a value between 1 and 255, or DEFAULT_AMPLITUDE.
+ * @return Returns the flag indicating whether setting the vibrator amplitude was successful.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_set_amplitude(uint8_t amplitude)
 {
     vibrator_msg_t buffer;
@@ -481,21 +389,13 @@ int vibrator_set_amplitude(uint8_t amplitude)
     return vibrator_commit(&buffer);
 }
 
-/****************************************************************************
- * Name: vibrator_get_capabilities()
+/**
+ * @brief Get vibration capabilities.
  *
- * Description:
- *   get vibration capabilities
- *
- * Input Parameters:
- *   capabilities - buffer that store capabilities
- *
- * Returned Value:
- *   returns the flag indicating get vibrator capability, greater than or equal
- *   to 0 means success, otherwise it means failure
- *
- ****************************************************************************/
-
+ * @param capabilities Buffer that stores capabilities.
+ * @return Returns the flag indicating success in getting vibrator capability.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
 int vibrator_get_capabilities(int32_t* capabilities)
 {
     vibrator_msg_t buffer;
