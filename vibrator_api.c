@@ -20,7 +20,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <log/log.h>
 #include <netpacket/rpmsg.h>
 #include <stdint.h>
 #include <stdio.h>
