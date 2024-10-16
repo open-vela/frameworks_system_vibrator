@@ -21,6 +21,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef CONFIG_ANDROID_BINDER
+#include <log/log.h>
+#else
+#include <syslog.h>
+#endif
+
 #include "vibrator_api.h"
 
 /****************************************************************************
@@ -33,19 +39,31 @@
 #define VIBRATOR_MSG_RESULT 4
 
 #ifdef CONFIG_VIBRATOR_ERROR
+#ifdef CONFIG_ANDROID_BINDER
 #define VIBRATORERR(format, args...) SLOGE(format, ##args)
+#else
+#define VIBRATORERR(format, args...) syslog(LOG_ERR, format "\n", ##args)
+#endif
 #else
 #define VIBRATORERR(format, args...)
 #endif
 
 #ifdef CONFIG_VIBRATOR_WARN
+#ifdef CONFIG_ANDROID_BINDER
 #define VIBRATORWARN(format, args...) SLOGW(format, ##args)
+#else
+#define VIBRATORWARN(format, args...) syslog(LOG_WARN, format "\n", ##args)
+#endif
 #else
 #define VIBRATORWARN(format, args...)
 #endif
 
 #ifdef CONFIG_VIBRATOR_INFO
+#ifdef CONFIG_ANDROID_BINDER
 #define VIBRATORINFO(format, args...) SLOGI(format, ##args)
+#else
+#define VIBRATORINFO(format, args...) syslog(LOG_INFO, format "\n", ##args)
+#endif
 #else
 #define VIBRATORINFO(format, args...)
 #endif

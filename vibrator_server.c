@@ -20,7 +20,6 @@
 
 #include <fcntl.h>
 #include <kvdb.h>
-#include <log/log.h>
 #include <mqueue.h>
 #include <netpacket/rpmsg.h>
 #include <poll.h>
