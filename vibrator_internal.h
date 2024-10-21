@@ -18,6 +18,7 @@
 #ifndef __INCLUDE_VIBRATOR_H
 #define __INCLUDE_VIBRATOR_H
 
+#include <nuttx/compiler.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -95,13 +96,13 @@ enum {
  * @amplitudes: the amplitudes array
  */
 
-begin_packed_struct typedef struct {
+typedef struct {
     int8_t repeat;
     uint8_t length;
     int16_t count;
     uint8_t amplitudes[WAVEFORM_MAXNUM];
     uint32_t timings[WAVEFORM_MAXNUM];
-} vibrator_waveform_t end_packed_struct;
+} aligned_data(4) vibrator_waveform_t;
 
 /* struct vibrator_effect_t
  * @effect_id: the id of effect
@@ -109,14 +110,14 @@ begin_packed_struct typedef struct {
  * @play_length: returned effect play length
  */
 
-begin_packed_struct typedef struct {
+typedef struct {
     int32_t effect_id;
     int32_t play_length;
     union {
         uint8_t es;
         float amplitude;
     };
-} vibrator_effect_t end_packed_struct;
+} aligned_data(4) vibrator_effect_t;
 
 /* struct vibrator_msg_t
  * @type: vibrator of type
@@ -129,11 +130,12 @@ begin_packed_struct typedef struct {
  * @capabilities: the capabilities of vibrator
  */
 
-begin_packed_struct typedef struct {
+typedef struct {
     int32_t result;
     uint8_t type;
     uint8_t request_len;
     uint8_t response_len;
+    uint8_t padding;
     union {
         uint8_t intensity;
         uint8_t amplitude;
@@ -142,6 +144,6 @@ begin_packed_struct typedef struct {
         vibrator_waveform_t wave;
         vibrator_effect_t effect;
     };
-} vibrator_msg_t end_packed_struct;
+} aligned_data(4) vibrator_msg_t;
 
 #endif /* #define __INCLUDE_VIBRATOR_H */
