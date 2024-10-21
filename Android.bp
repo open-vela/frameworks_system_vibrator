@@ -23,6 +23,9 @@ cc_library_static {
     cflags: [
         "-DCONFIG_VIBRATOR_SERVER_CPUNAME=\"ap\""
     ],
+    header_libs: [
+        "nuttx_libc_headers"
+    ],
     proprietary: true
 }
 
