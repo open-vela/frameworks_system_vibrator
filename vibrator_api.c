@@ -145,7 +145,7 @@ static int vibrator_commit(vibrator_msg_t* buffer)
         ret = ret < 0 ? -errno : -EINVAL;
         goto errout;
     }
-    VIBRATORINFO("recv len = %d, result = %d", ret, buffer->result);
+    VIBRATORINFO("recv len = %d, result = %" PRIi32, ret, buffer->result);
     ret = buffer->result;
 
 errout:
