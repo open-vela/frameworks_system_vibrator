@@ -103,11 +103,11 @@ static void usage(void)
 
 static int test_play_predefined(uint8_t id, vibrator_effect_strength_e es)
 {
-    int play_length_ms;
+    int32_t play_length_ms;
     int ret;
     printf("id = %d, es = %d\n", id, es);
     ret = vibrator_play_predefined(id, es, &play_length_ms);
-    printf("Effect(with strength) play length: %d\n", play_length_ms);
+    printf("Effect(with strength) play length: %" PRIi32 "\n", play_length_ms);
     return ret;
 }
 
@@ -125,13 +125,13 @@ static int test_play_interval(int duration, int interval, int count)
 
 static int test_play_primitive(uint8_t id, uint16_t amplitude)
 {
-    int play_length_ms;
+    int32_t play_length_ms;
     int ret;
 
     float amplitude_f = (float)amplitude / 255.0;
 
     ret = vibrator_play_primitive(id, amplitude_f, &play_length_ms);
-    printf("Effect(with amplitude) play length: %d\n", play_length_ms);
+    printf("Effect(with amplitude) play length: %" PRIi32 "\n", play_length_ms);
     return ret;
 }
 
@@ -156,7 +156,7 @@ static int test_get_capabilities(void)
     if (ret < 0)
         return ret;
 
-    printf("vibrator server reporting capalities: %d\n", capabilities);
+    printf("vibrator server reporting capalities: %" PRIi32 "\n", capabilities);
     return ret;
 }
 
