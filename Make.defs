@@ -15,7 +15,7 @@
 #
 
 ifneq ($(CONFIG_VIBRATOR),)
-CONFIGURED_APPS += $(APPDIR)/frameworks/vibrator/
-CFLAGS          += ${INCDIR_PREFIX}$(APPDIR)/frameworks/vibrator/
-CXXFLAGS        += ${INCDIR_PREFIX}$(APPDIR)/frameworks/vibrator/
+CONFIGURED_APPS += $(APPDIR)/frameworks/system/vibrator/
+CFLAGS          += ${INCDIR_PREFIX}$(APPDIR)/frameworks/system/vibrator/
+CXXFLAGS        += ${INCDIR_PREFIX}$(APPDIR)/frameworks/system/vibrator/
 endif

@@ -18,7 +18,8 @@ if(CONFIG_VIBRATOR)
   set_property(
     TARGET nuttx
     APPEND
-    PROPERTY NUTTX_INCLUDE_DIRECTORIES ${NUTTX_APPS_DIR}/frameworks/vibrator)
+    PROPERTY NUTTX_INCLUDE_DIRECTORIES
+             ${NUTTX_APPS_DIR}/frameworks/system/vibrator)
 
   nuttx_add_library(vibrator_api STATIC)
 
