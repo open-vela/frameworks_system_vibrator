@@ -194,6 +194,24 @@ int vibrator_set_amplitude(uint8_t amplitude);
  */
 int vibrator_get_capabilities(int32_t* capabilities);
 
+/**
+ * @brief Calibrate vibrator when it is not calibrated, Generally at the time of leaving the factory.
+ *
+ * @param data Buffer that stores the calibration result data.
+ * @return Returns the flag indicating whether the vibrator calibration was successful.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
+int vibrator_calibrate(uint8_t* data);
+
+/**
+ * @brief Get vibration calibration data.
+ *
+ * @param data Buffer that stores calibration data.
+ * @return Returns the flag indicating success in setting vibrator calibration data.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
+int vibrator_set_calibvalue(uint8_t* data);
+
 #ifdef __cplusplus
 }
 #endif
