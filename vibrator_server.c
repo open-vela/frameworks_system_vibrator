@@ -247,6 +247,60 @@ static int ff_set_amplitude(ff_dev_t* ff_dev, uint8_t amplitude)
 }
 
 /****************************************************************************
+ * Name: ff_calibrate()
+ *
+ * Description:
+ *   operate the driver's interface, calibrate vibrator device
+ *
+ * Input Parameters:
+ *   ff_dev - structure for operating the ff device driver
+ *   data - buffer that store calibrate result data
+ *
+ * Returned Value:
+ *   0 means success
+ *
+ ****************************************************************************/
+
+static int ff_calibrate(ff_dev_t* ff_dev, uint8_t* data)
+{
+    int ret;
+
+    ret = ioctl(ff_dev->fd, EVIOCCALIBRATE, data);
+    if (ret < 0) {
+        VIBRATORERR("ff device calibrate failed, errno = %d", errno);
+    }
+
+    return ret;
+}
+
+/****************************************************************************
+ * Name: ff_set_calibvalue()
+ *
+ * Description:
+ *   operate the driver's interface, set calibrate value to vibrator device
+ *
+ * Input Parameters:
+ *   ff_dev - structure for operating the ff device driver
+ *   data - buffer that store calibrate value which will be set to device
+ *
+ * Returned Value:
+ *   0 means success
+ *
+ ****************************************************************************/
+
+static int ff_set_calibvalue(ff_dev_t* ff_dev, uint8_t* data)
+{
+    int ret;
+
+    ret = ioctl(ff_dev->fd, EVIOCSETCALIBDATA, data);
+    if (ret < 0) {
+        VIBRATORERR("ff device set calibrate data failed, errno = %d", errno);
+    }
+
+    return ret;
+}
+
+/****************************************************************************
  * Name: play_effect()
  *
  * Description:
@@ -916,6 +970,14 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     case VIBRATION_GET_CAPABLITY: {
         ret = receive_get_capabilities(ff_dev, &msg->capabilities);
         VIBRATORINFO("receive get capabilities = %d", (int)msg->capabilities);
+        break;
+    }
+    case VIBRATION_CALIBRATE: {
+        ret = ff_calibrate(ff_dev, msg->calibvalue);
+        break;
+    }
+    case VIBRATION_SET_CALIBVALUE: {
+        ret = ff_set_calibvalue(ff_dev, msg->calibvalue);
         break;
     }
     default: {

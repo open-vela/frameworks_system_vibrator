@@ -18,6 +18,7 @@
  * Included Files
  ****************************************************************************/
 
+#include <kvdb.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,6 +77,8 @@ enum vibrator_test_apino_e {
     VIBRATOR_TEST_SETINTENSITY,
     VIBRATOR_TEST_GETINTENSITY,
     VIBRATOR_TEST_INTERVAL,
+    VIBRATOR_TEST_CALIBRATE,
+    VIBRATOR_TEST_SET_CALIBVALUE,
 };
 
 /****************************************************************************
@@ -158,6 +161,46 @@ static int test_get_capabilities(void)
 
     printf("vibrator server reporting capalities: %" PRIi32 "\n", capabilities);
     return ret;
+}
+
+static int test_calibrate(void)
+{
+    uint8_t value[32] = { 0 };
+    char value_fmt[32] = { 0 };
+    uint8_t calib_finish = 0;
+    int* calib_value = (int*)value;
+    int ret;
+
+    ret = vibrator_calibrate(value);
+    if (ret >= 0) {
+        calib_finish = 1;
+        printf("vibrator calibrate finished calibrate value: ");
+        for (int i = 0; i < sizeof(value); i++) {
+            printf("%02x ", value[i]);
+        }
+        printf("\n");
+    }
+    sprintf(value_fmt, "%d,%d", calib_finish, calib_value[0]);
+    printf("calib_value[0]: %d, value_fmt: %s\n", calib_value[0], value_fmt);
+    property_set("calibvalue.testkey", (char*)value_fmt);
+
+    return ret;
+}
+
+static int test_set_calibvalue(void)
+{
+    uint8_t value[32] = { 0 };
+    int ret;
+
+    ret = property_get("calibvalue.testkey", (char*)value, "no_value");
+    printf("calibvalue.testkey: %s\n", value);
+
+    if (ret < 0 || strcmp((char*)value, "no_value") == 0) {
+        printf("get vibrator calib failed, errno = %d", errno);
+        return -1;
+    }
+
+    return vibrator_set_calibvalue(value);
 }
 
 static int param_parse(int argc, char* argv[],
@@ -342,6 +385,22 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
         ret = test_play_interval(test_data->time, test_data->interval, test_data->count);
         if (ret < 0) {
             printf("play_interval failed: %d\n", ret);
+            return ret;
+        }
+        break;
+    case VIBRATOR_TEST_CALIBRATE:
+        printf("API TEST: vibrator_calibrate\n");
+        ret = test_calibrate();
+        if (ret < 0) {
+            printf("calibrate failed: %d\n", ret);
+            return ret;
+        }
+        break;
+    case VIBRATOR_TEST_SET_CALIBVALUE:
+        printf("API TEST: vibrator_set_calibvalue\n");
+        ret = test_set_calibvalue();
+        if (ret < 0) {
+            printf("set_calibvalue failed: %d\n", ret);
             return ret;
         }
         break;

@@ -38,6 +38,7 @@
 #define WAVEFORM_MAXNUM 24
 #define VIBRATOR_MSG_HEADER 8
 #define VIBRATOR_MSG_RESULT 4
+#define VIBRATOR_CALIBVALUE_MAX 32
 
 #ifdef CONFIG_VIBRATOR_ERROR
 #ifdef CONFIG_ANDROID_BINDER
@@ -86,7 +87,9 @@ enum {
     VIBRATION_SET_AMPLITUDE,
     VIBRATION_GET_CAPABLITY,
     VIBRATION_SET_INTENSITY,
-    VIBRATION_GET_INTENSITY
+    VIBRATION_GET_INTENSITY,
+    VIBRATION_CALIBRATE,
+    VIBRATION_SET_CALIBVALUE,
 };
 
 /* struct vibrator_waveform_t
@@ -143,6 +146,7 @@ typedef struct {
         int32_t capabilities;
         vibrator_waveform_t wave;
         vibrator_effect_t effect;
+        uint8_t calibvalue[VIBRATOR_CALIBVALUE_MAX];
     };
 } aligned_data(4) vibrator_msg_t;
 

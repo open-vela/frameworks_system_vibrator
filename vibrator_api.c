@@ -78,6 +78,14 @@ static void vibrator_msg_packet(vibrator_msg_t* buffer)
         buffer->request_len = sizeof(vibrator_intensity_e) + VIBRATOR_MSG_HEADER;
         buffer->response_len = VIBRATOR_MSG_RESULT;
         break;
+    case VIBRATION_CALIBRATE:
+        buffer->request_len = VIBRATOR_MSG_HEADER;
+        buffer->response_len = VIBRATOR_MSG_HEADER + VIBRATOR_CALIBVALUE_MAX;
+        break;
+    case VIBRATION_SET_CALIBVALUE:
+        buffer->request_len = VIBRATOR_MSG_HEADER + VIBRATOR_CALIBVALUE_MAX;
+        buffer->response_len = VIBRATOR_MSG_RESULT;
+        break;
     default:
         VIBRATORERR("unknown message type %d", buffer->type);
         buffer->request_len = sizeof(vibrator_msg_t);
@@ -408,4 +416,43 @@ int vibrator_get_capabilities(int32_t* capabilities)
         *capabilities = buffer.capabilities;
 
     return ret;
+}
+
+/**
+ * @brief Calibrate vibrator when it is not calibrated, Generally at the time of leaving the factory.
+ *
+ * @param data Buffer that stores the calibration result data.
+ * @return Returns the flag indicating whether the vibrator calibration was successful.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
+int vibrator_calibrate(uint8_t* data)
+{
+    vibrator_msg_t buffer;
+    int ret;
+
+    buffer.type = VIBRATION_CALIBRATE;
+    memset(buffer.calibvalue, 0, VIBRATOR_CALIBVALUE_MAX);
+
+    ret = vibrator_commit(&buffer);
+    if (ret >= 0)
+        memcpy(data, buffer.calibvalue, VIBRATOR_CALIBVALUE_MAX);
+
+    return ret;
+}
+
+/**
+ * @brief Get vibration calibration data.
+ *
+ * @param data Buffer that stores calibration data.
+ * @return Returns the flag indicating success in setting vibrator calibration data.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
+int vibrator_set_calibvalue(uint8_t* data)
+{
+    vibrator_msg_t buffer;
+
+    buffer.type = VIBRATION_SET_CALIBVALUE;
+    memcpy(buffer.calibvalue, data, VIBRATOR_CALIBVALUE_MAX);
+
+    return vibrator_commit(&buffer);
 }
