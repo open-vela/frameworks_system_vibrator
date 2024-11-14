@@ -1,5 +1,7 @@
 # Introduction
 
+\[ English | [简体中文](README_zh-cn.md) \]
+
 The Vibrator Framework provides a set of interfaces and functionalities for managing and controlling vibrators. This framework is designed to deliver powerful vibration capabilities for various devices, it enhances user experience through customizable vibration patterns, amplitudes, and strengths. This framework also supports cross-core API calls to control the vibrator device.
 
 # Features
