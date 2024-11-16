@@ -38,6 +38,7 @@
 #define VIBRATOR_TEST_DEFAULT_API 1
 #define VIBRATOR_TEST_DEFAULT_STRENGTH 2
 #define VIBRATOR_TEST_WAVEFORM_MAX 7
+#define VIBRATOR_TEST_COMPOSE_MAX 4
 #define VIBRATOR_TEST_DEFAULT_INTERVAL 1000
 #define VIBRATOR_TEST_DEFAULT_COUNT 5
 
@@ -51,6 +52,11 @@ struct waveform_arrays_s {
     uint8_t length;
 };
 
+struct compose_arrays_s {
+    vibrator_composite_effect_t* composite_effects;
+    uint8_t length;
+};
+
 struct vibrator_test_s {
     int api;
     int time;
@@ -60,9 +66,11 @@ struct vibrator_test_s {
     int es;
     int repeat;
     int waveformid;
+    int composeid;
     int interval;
     int count;
     struct waveform_arrays_s waveform_args[VIBRATOR_TEST_WAVEFORM_MAX];
+    struct compose_arrays_s compose_args[VIBRATOR_TEST_COMPOSE_MAX];
 };
 
 enum vibrator_test_apino_e {
@@ -79,6 +87,7 @@ enum vibrator_test_apino_e {
     VIBRATOR_TEST_INTERVAL,
     VIBRATOR_TEST_CALIBRATE,
     VIBRATOR_TEST_SET_CALIBVALUE,
+    VIBRATOR_TEST_COMPOSE,
 };
 
 /****************************************************************************
@@ -100,6 +109,7 @@ static void usage(void)
            "\t[-i <val> ] The intensity of vibration[0,3], default: 2\n"
            "\t[-s <val> ] The effect strength, [0, 2], default: 2\n"
            "\t[-l <val> ] The waveform array id, [0, 6], default: 0\n"
+           "\t[-p <val> ] The compose array id, [0, 3], default: 0\n"
            "\t[-d <val> ] The interval of vibration in milliseconds, default: 1000\n"
            "\t[-c <val> ] The count of vibration, default: 5\n");
 }
@@ -135,6 +145,16 @@ static int test_play_primitive(uint8_t id, uint16_t amplitude)
 
     ret = vibrator_play_primitive(id, amplitude_f, &play_length_ms);
     printf("Effect(with amplitude) play length: %" PRIi32 "\n", play_length_ms);
+    return ret;
+}
+
+static int test_play_compose(int repeat, struct compose_arrays_s compose_args)
+{
+    int ret;
+
+    ret = vibrator_play_compose(compose_args.composite_effects, repeat, compose_args.length);
+    // sleep(6);
+    printf("Play compose done: ret = %d\n", ret);
     return ret;
 }
 
@@ -209,7 +229,7 @@ static int param_parse(int argc, char* argv[],
     const char* apino;
     int ch;
 
-    while ((ch = getopt(argc, argv, "t:a:e:r:i:s:l:d:c:h")) != EOF) {
+    while ((ch = getopt(argc, argv, "t:a:e:r:i:s:l:p:d:c:h")) != EOF) {
         switch (ch) {
         case 't': {
             printf("%s\n", optarg);
@@ -259,6 +279,16 @@ static int param_parse(int argc, char* argv[],
             if (test_data->waveformid < 0
                 || test_data->waveformid >= VIBRATOR_TEST_WAVEFORM_MAX) {
                 printf("NOTE: Invalid waveform id, use 0 to 6\n");
+                return -1;
+            }
+            break;
+        }
+        case 'p': {
+            test_data->composeid = atoi(optarg);
+            printf("test_data->composeid = %d\n", test_data->composeid);
+            if (test_data->composeid < 0
+                || test_data->composeid >= VIBRATOR_TEST_COMPOSE_MAX) {
+                printf("NOTE: Invalid compose id, use 0 to 3\n");
                 return -1;
             }
             break;
@@ -329,6 +359,14 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
         ret = test_play_primitive(test_data->effectid, test_data->amplitude);
         if (ret < 0) {
             printf("play_predefined failed: %d\n", ret);
+            return ret;
+        }
+        break;
+    case VIBRATOR_TEST_COMPOSE:
+        printf("API TEST: vibrator_play_compose\n");
+        ret = test_play_compose(test_data->repeat, test_data->compose_args[test_data->composeid]);
+        if (ret < 0) {
+            printf("play_compose failed: %d\n", ret);
             return ret;
         }
         break;
@@ -453,6 +491,76 @@ static void waveform_args_init(struct vibrator_test_s* test_data)
     test_data->waveform_args[6] = (struct waveform_arrays_s) { timings6, amplitudes6, 3 };
 }
 
+static void compose_args_init(struct vibrator_test_s* test_data)
+{
+    static vibrator_composite_effect_t compose_effect1[] = {
+        {
+            .delay_ms = 0,
+            .primitive = 20,
+            .scale = 1,
+        },
+        {
+            .delay_ms = 0,
+            .primitive = 20,
+            .scale = 1,
+        }
+    };
+
+    static vibrator_composite_effect_t compose_effect2[] = {
+        {
+            .delay_ms = 0,
+            .primitive = 21,
+            .scale = 1,
+        },
+        {
+            .delay_ms = 0,
+            .primitive = 21,
+            .scale = 1,
+        }
+    };
+
+    static vibrator_composite_effect_t compose_effect3[] = {
+        {
+            .delay_ms = 0,
+            .primitive = 22,
+            .scale = 1,
+        }
+    };
+
+    static vibrator_composite_effect_t compose_effect4[] = {
+        {
+            .delay_ms = 0,
+            .primitive = 22,
+            .scale = 0.2,
+        },
+        {
+            .delay_ms = 0,
+            .primitive = 22,
+            .scale = 0.4,
+        },
+        {
+            .delay_ms = 0,
+            .primitive = 22,
+            .scale = 0.6,
+        },
+        {
+            .delay_ms = 0,
+            .primitive = 22,
+            .scale = 0.8,
+        },
+        {
+            .delay_ms = 0,
+            .primitive = 22,
+            .scale = 1,
+        },
+    };
+
+    test_data->compose_args[0] = (struct compose_arrays_s) { compose_effect1, 2 };
+    test_data->compose_args[1] = (struct compose_arrays_s) { compose_effect2, 2 };
+    test_data->compose_args[2] = (struct compose_arrays_s) { compose_effect3, 1 };
+    test_data->compose_args[3] = (struct compose_arrays_s) { compose_effect4, 5 };
+}
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -476,6 +584,10 @@ int main(int argc, char* argv[])
     /*Init waveform test arrays*/
     waveform_args_init(&test_data);
     test_data.waveformid = 0;
+
+    /* Init compose test arrays */
+    compose_args_init(&test_data);
+    test_data.composeid = 0;
 
     /* Parse Argument */
 

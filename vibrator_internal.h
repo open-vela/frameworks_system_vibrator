@@ -39,6 +39,7 @@
 #define VIBRATOR_MSG_HEADER 8
 #define VIBRATOR_MSG_RESULT 4
 #define VIBRATOR_CALIBVALUE_MAX 32
+#define VIBRATION_COMPOSE_MAX 10
 
 #ifdef CONFIG_VIBRATOR_ERROR
 #ifdef CONFIG_ANDROID_BINDER
@@ -107,6 +108,13 @@ typedef struct {
     uint32_t timings[WAVEFORM_MAXNUM];
 } aligned_data(4) vibrator_waveform_t;
 
+typedef struct {
+    int8_t repeat;
+    uint8_t length;
+    int16_t index;
+    vibrator_composite_effect_t composite_effect[VIBRATION_COMPOSE_MAX];
+} aligned_data(4) vibrator_compose_t;
+
 /* struct vibrator_effect_t
  * @effect_id: the id of effect
  * @es: the intensity of vibration
@@ -147,6 +155,7 @@ typedef struct {
         vibrator_waveform_t wave;
         vibrator_effect_t effect;
         uint8_t calibvalue[VIBRATOR_CALIBVALUE_MAX];
+        vibrator_compose_t composition;
     };
 } aligned_data(4) vibrator_msg_t;
 
