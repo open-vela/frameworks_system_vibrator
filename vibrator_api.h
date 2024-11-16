@@ -74,6 +74,18 @@ typedef enum {
     VIBRATION_INTENSITY_OFF = 3 /**< No vibration (off) */
 } vibrator_intensity_e;
 
+/**
+ * @brief Structure representing a composite effect
+ *
+ * This structure defines the parameters for a vibration composition,
+ * including delay time, vibration pattern, and intensity scale.
+ */
+typedef struct {
+    int32_t delay_ms; /**< Period of silence preceding primitive */
+    uint32_t primitive; /**< Identifier for the primitive effect */
+    float scale; /**< Scale factor for the primitive effect, 0.0-1.0 */
+} vibrator_composite_effect_t;
+
 /****************************************************************************
  * @brief Public Function Prototypes
  ****************************************************************************/
@@ -140,6 +152,19 @@ int vibrator_play_predefined(uint8_t effect_id, vibrator_effect_strength_e es,
  */
 int vibrator_play_primitive(uint8_t effect_id, float amplitude,
     int32_t* play_length);
+
+/**
+ * @brief Play composed primitive effect.
+ *
+ * @param composite_effects The composition of primitive effects.
+ * @param repeat The index into the primitive array at which to repeat, or -1 if
+ *               you don't want to repeat.
+ * @param length The length of composite effects array.
+ * @return Returns the flag that the vibrator is playing the predefined effect.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
+int vibrator_play_compose(vibrator_composite_effect_t* composite_effects,
+    int8_t repeat, uint8_t length);
 
 /**
  * @brief Get vibration intensity.

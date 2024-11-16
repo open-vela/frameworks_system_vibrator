@@ -207,6 +207,34 @@ int vibrator_play_waveform(uint32_t timings[], uint8_t amplitudes[],
 }
 
 /**
+ * @brief Play composed primitive effect.
+ *
+ * @param composite_effects The composition of primitive effects.
+ * @param repeat The index into the primitive array at which to repeat, or -1 if
+ *               you don't want to repeat.
+ * @param length The length of composite effects array.
+ * @return Returns the flag that the vibrator is playing the predefined effect.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
+int vibrator_play_compose(vibrator_composite_effect_t* composite_effects,
+    int8_t repeat, uint8_t length)
+{
+    vibrator_msg_t buffer;
+
+    if (repeat < -1 || repeat >= length)
+        return -EINVAL;
+
+    buffer.type = VIBRATION_COMPOSITION;
+    buffer.composition.length = length;
+    buffer.composition.repeat = repeat;
+    buffer.composition.index = 0;
+    memcpy(buffer.composition.composite_effect, composite_effects,
+        sizeof(vibrator_composite_effect_t) * length);
+
+    return vibrator_commit(&buffer);
+}
+
+/**
  * @brief Play an interval vibration with specified duration and interval.
  *
  * @param duration The duration of vibration.

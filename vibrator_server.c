@@ -72,10 +72,11 @@ typedef struct {
 } ff_dev_t;
 
 typedef struct {
-    vibrator_waveform_t wave;
-    vibrator_msg_t msg;
-    uv_timer_t timer;
     ff_dev_t* ff_dev;
+    uv_timer_t timer;
+    vibrator_msg_t msg;
+    vibrator_waveform_t wave;
+    vibrator_compose_t composition;
 } threadargs;
 
 typedef struct vibrator_context_s {
@@ -630,6 +631,72 @@ static int receive_waveform(void* args)
 }
 
 /****************************************************************************
+ * Name: compose_timer_cb()
+ *
+ * Description:
+ *   callback function to wait for a given vibration time
+ *
+ * Input Parameters:
+ *   timer - the handle of the uv timer
+ *
+ ****************************************************************************/
+
+static void compose_timer_cb(uv_timer_t* timer)
+{
+    threadargs* thread_args = timer->data;
+    vibrator_compose_t* compose = &thread_args->composition;
+    ff_dev_t* ff_dev = thread_args->ff_dev;
+    int32_t play_length;
+    uint8_t amplitude;
+
+    uv_timer_stop(timer);
+    VIBRATORINFO("%s index %d length %d repeat %d", __func__, compose->index, compose->length, compose->repeat);
+
+    if (compose->index < compose->length) {
+        VIBRATORINFO("index(count) = %d", compose->index);
+        amplitude = scale(compose->composite_effect[compose->index].scale * VIBRATOR_MAX_AMPLITUDE, ff_dev->intensity);
+        VIBRATORINFO("scale %f, primitive %d", compose->composite_effect[compose->index].scale, compose->composite_effect[compose->index].primitive);
+        if (amplitude != 0) {
+            play_primitive(ff_dev, compose->composite_effect[compose->index].primitive, amplitude, (long*)&play_length);
+        }
+        compose->index++;
+        uv_timer_start(&thread_args->timer, compose_timer_cb, play_length + compose->composite_effect[compose->index].delay_ms, 0);
+        VIBRATORINFO("play_length %d delay_ms %d", play_length, compose->composite_effect[compose->index].delay_ms);
+    } else if (compose->repeat < 0) {
+        VIBRATORINFO("repeat < 0, play compose exit");
+    } else {
+        compose->index = compose->repeat;
+        uv_timer_start(&thread_args->timer, compose_timer_cb,
+            compose->composite_effect[compose->index].delay_ms, 0);
+    }
+}
+
+/****************************************************************************
+ * Name: receive_compose()
+ *
+ * Description:
+ *   receive compose from vibrator_upper file
+ *
+ * Input Parameters:
+ *   args - the args of threadargs
+ *
+ ****************************************************************************/
+
+static int receive_compose(void* args)
+{
+    threadargs* thread_args = args;
+    vibrator_compose_t* compose = &thread_args->composition;
+
+    compose->index = 0;
+
+    if (!should_vibrate(thread_args->ff_dev->intensity))
+        return -ENOTSUP;
+
+    return uv_timer_start(&thread_args->timer, compose_timer_cb,
+        compose->composite_effect[compose->index].delay_ms, 0);
+}
+
+/****************************************************************************
  * Name: interval_timer_cb()
  *
  * Description:
@@ -919,6 +986,13 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
         thread_args->wave = msg->wave;
         ret = receive_waveform(thread_args);
         VIBRATORINFO("receive waveform ret = %d", ret);
+        break;
+    }
+    case VIBRATION_COMPOSITION: {
+        uv_timer_stop(timer);
+        thread_args->composition = msg->composition;
+        ret = receive_compose(thread_args);
+        VIBRATORINFO("receive compose ret = %d", ret);
         break;
     }
     case VIBRATION_INTERVAL: {
