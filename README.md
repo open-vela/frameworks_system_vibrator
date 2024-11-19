@@ -19,21 +19,31 @@ The Vibrator Framework provides a set of interfaces and functionalities for mana
 - Required configurations:
     - Build the vibrator framework
         - open vibrator service(local core)
-        `VIBRATOR = y`
-        `VIBRATOR_SERVER = y`  # Enable the Vibrator service (vibratord)
-        `VIBRATOR_SERVER_CPUNAME = "ap"`  # (Optional) The default main core is the 'ap' core. You can choose the main core through the configuration.
+            ```bash
+            `VIBRATOR = y`
+            `VIBRATOR_SERVER = y`  # Enable the Vibrator service (vibratord)
+            `VIBRATOR_SERVER_CPUNAME = "ap"`  # (Optional) The default main core is the 'ap' core. You can choose the main core through the configuration.
+            ```
         - use vibrator service(local or remote core)
-        `VIBRATOR = y`
+            ```bash
+            `VIBRATOR = y`
+            ```
         - log
-        `CONFIG_VIBRATOR_INFO = y`
-        `CONFIG_VIBRATOR_WARN = y`
-        `CONFIG_VIBRATOR_ERROR = y`
+            ```bash
+            `CONFIG_VIBRATOR_INFO = y`
+            `CONFIG_VIBRATOR_WARN = y`
+            `CONFIG_VIBRATOR_ERROR = y`
+            ```
     - Build the vibrator test program
+        ```bash
         `VIBRATOR_TEST = y` # (optional)
+        ```
     - Driver related configurations
+        ```bash
         `INPUT_FF = y`  # Enable ForceFeedback driver framework support
         `FF_DUMMY = y` # Enable virtual FF device driver to test Vibrator functionality (when no actual device is present)
         `FF_xxx = y`  # Enable the corresponding hardware device driver, for example, `FF_AW86225`.
+        ```
 - Complete the initialization and registration of the force feedback driver.
 - Start the vibrator service use `vibrator &`
 
@@ -49,6 +59,7 @@ Refer to vibrator_test.c for practical examples on how to use the Vibrator
 
 The main files and directories in the Vibrator Framework are as follows:
 
+```tree
 ├── Android.bp                # Build configuration for Android
 ├── CMakeLists.txt            # CMake build configuration file
 ├── Kconfig                   # Configuration options
@@ -58,3 +69,4 @@ The main files and directories in the Vibrator Framework are as follows:
 ├── vibrator_internal.h       # Internal header file for the vibrator implementation
 ├── vibrator_server.c         # Server implementation for handling vibrator requests
 └── vibrator_test.c           # Test file demonstrating how to use the Vibrator API
+```
