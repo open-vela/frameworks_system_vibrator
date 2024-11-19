@@ -20,29 +20,29 @@ The Vibrator Framework provides a set of interfaces and functionalities for mana
     - Build the vibrator framework
         - open vibrator service(local core)
             ```bash
-            `VIBRATOR = y`
-            `VIBRATOR_SERVER = y`  # Enable the Vibrator service (vibratord)
-            `VIBRATOR_SERVER_CPUNAME = "ap"`  # (Optional) The default main core is the 'ap' core. You can choose the main core through the configuration.
+            VIBRATOR = y
+            VIBRATOR_SERVER = y  # Enable the Vibrator service (vibratord)
+            VIBRATOR_SERVER_CPUNAME = "ap"  # (Optional) The default main core is the 'ap' core. You can choose the main core through the configuration.
             ```
         - use vibrator service(local or remote core)
             ```bash
-            `VIBRATOR = y`
+            VIBRATOR = y
             ```
         - log
             ```bash
-            `CONFIG_VIBRATOR_INFO = y`
-            `CONFIG_VIBRATOR_WARN = y`
-            `CONFIG_VIBRATOR_ERROR = y`
+            CONFIG_VIBRATOR_INFO = y
+            CONFIG_VIBRATOR_WARN = y
+            CONFIG_VIBRATOR_ERROR = y
             ```
     - Build the vibrator test program
         ```bash
-        `VIBRATOR_TEST = y` # (optional)
+        VIBRATOR_TEST = y # (optional)
         ```
     - Driver related configurations
         ```bash
-        `INPUT_FF = y`  # Enable ForceFeedback driver framework support
-        `FF_DUMMY = y` # Enable virtual FF device driver to test Vibrator functionality (when no actual device is present)
-        `FF_xxx = y`  # Enable the corresponding hardware device driver, for example, `FF_AW86225`.
+        INPUT_FF = y  # Enable ForceFeedback driver framework support
+        FF_DUMMY = y # Enable virtual FF device driver to test Vibrator functionality (when no actual device is present)
+        FF_xxx = y  # Enable the corresponding hardware device driver, for example, `FF_AW86225`.
         ```
 - Complete the initialization and registration of the force feedback driver.
 - Start the vibrator service use `vibrator &`
