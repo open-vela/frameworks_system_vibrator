@@ -19,21 +19,31 @@
 - 需开启的配置：
     - 振动器框架侧配置
         - 开启振动器服务（本核）
-        `VIBRATOR = y`
-        `VIBRATOR_SERVER = y`  # 启用振动器服务（vibratord）
-        `VIBRATOR_SERVER_CPUNAME = "ap"`  # （可选）默认主核为'ap'。您可以通过配置选择主核。
+            ```bash
+            `VIBRATOR = y`
+            `VIBRATOR_SERVER = y`  # 启用振动器服务（vibratord）
+            `VIBRATOR_SERVER_CPUNAME = "ap"`  # （可选）默认主核为'ap'。您可以通过配置选择主核。
+            ```
         - 使用振动器服务（本核或其他核）
-        `VIBRATOR = y`
+            ``` bash
+            `VIBRATOR = y`
+            ```
         - 日志
-        `CONFIG_VIBRATOR_INFO = y`
-        `CONFIG_VIBRATOR_WARN = y`
-        `CONFIG_VIBRATOR_ERROR = y`
+            ``` bash
+            `CONFIG_VIBRATOR_INFO = y`
+            `CONFIG_VIBRATOR_WARN = y`
+            `CONFIG_VIBRATOR_ERROR = y`
+            ```
     - 振动器测试程序
+        ```bash
         `VIBRATOR_TEST = y`  # （可选）
+        ```
     - 驱动侧相关配置
+        ```bash
         `INPUT_FF = y`  # 启用力反馈驱动框架支持
         `FF_DUMMY = y`  # 启用虚拟 FF 设备驱动以测试振动器功能（当没有实际设备时）
         `FF_xxx = y`   # 启用相应的硬件设备驱动，例如，`FF_AW86225`。
+        ```
 - 完成力反馈驱动的初始化和注册。
 - 启动振动器服务，使用 `vibrator &`。
 
@@ -43,12 +53,12 @@
 
 # 使用方法
 
-参考 vibrator_test.c 获取有关如何使用振动器的实际示例。
+参考 `vibrator_test.c` 获取有关如何使用振动器的实际示例。
 
 # 文件结构
 
 振动器框架中的主要文件和目录如下：
-
+```tree
 ├── Android.bp                # Android 的构建配置
 ├── CMakeLists.txt            # CMake 构建配置文件
 ├── Kconfig                   # 配置选项
@@ -58,3 +68,4 @@
 ├── vibrator_internal.h       # 振动器实现的内部头文件
 ├── vibrator_server.c         # 处理振动器请求的服务器实现
 └── vibrator_test.c           # 演示如何使用振动器 API 的测试文件
+```
