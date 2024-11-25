@@ -57,6 +57,7 @@
 #define VIBRATOR_DEV_FS "/dev/lra0"
 #define KVDB_KEY_VIBRATOR_MODE "persist.vibrator_mode"
 #define KVDB_KEY_VIBRATOR_ENABLE "persist.vibration_enable"
+#define KVDB_KEY_VIBRATOR_CALIB "ro.factory.motor_calib"
 
 /****************************************************************************
  * Private Types
@@ -915,6 +916,7 @@ static int receive_get_capabilities(ff_dev_t* ff_dev, int32_t* capabilities)
 static int vibrator_init(ff_dev_t* ff_dev)
 {
     unsigned char ffbitmask[1 + FF_MAX / 8 / sizeof(unsigned char)];
+    uint8_t calib_data[32];
     int ret;
 
     ff_dev->curr_app_id = VIBRATOR_INVALID_VALUE;
@@ -949,6 +951,13 @@ static int vibrator_init(ff_dev_t* ff_dev)
 
     ff_dev->intensity = property_get_int32(KVDB_KEY_VIBRATOR_MODE,
         ff_dev->intensity);
+
+    ret = property_get(KVDB_KEY_VIBRATOR_CALIB, (char*)calib_data, "no_value");
+    if (ret < 0 || strcmp((char*)calib_data, "no_value") == 0) {
+        VIBRATORERR("get vibrator calib failed, errno = %d", errno);
+    } else {
+        ff_set_calibvalue(ff_dev, calib_data);
+    }
     return OK;
 }
 
