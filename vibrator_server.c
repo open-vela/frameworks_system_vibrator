@@ -950,7 +950,7 @@ static void connection_poll_cb(uv_poll_t* handle, int status, int events)
         }
     }
 
-    if (events & UV_DISCONNECT) {
+    if (status != 0 || (events & UV_DISCONNECT)) {
         VIBRATORINFO("client disconnect");
         uv_poll_stop(handle);
         close(ctx->sock);
