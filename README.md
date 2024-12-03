@@ -4,7 +4,7 @@
 
 The Vibrator Framework provides a set of interfaces and functionalities for managing and controlling vibrators. This framework is designed to deliver powerful vibration capabilities for various devices, it enhances user experience through customizable vibration patterns, amplitudes, and strengths. This framework also supports cross-core API calls to control the vibrator device.
 
-# Features
+## Features
 
 - Supports multiple vibration patterns and waveforms.
 - Adjustable amplitude and duration of vibrations.
@@ -47,15 +47,15 @@ The Vibrator Framework provides a set of interfaces and functionalities for mana
 - Complete the initialization and registration of the force feedback driver.
 - Start the vibrator service use `vibrator &`
 
-# Runtime Dependencies
+## Runtime Dependencies
 
 A physical device with a board connected to the vibration hardware, and the device driver has been implemented and correctly registered in the force feedback system, or a simulation environment with configuration enabled for direct testing.
 
-# Usage
+## Usage
 
 Refer to vibrator_test.c for practical examples on how to use the Vibrator
 
-# File Structure
+## File Structure
 
 The main files and directories in the Vibrator Framework are as follows:
 
