@@ -656,13 +656,13 @@ static void compose_timer_cb(uv_timer_t* timer)
     if (compose->index < compose->length) {
         VIBRATORINFO("index(count) = %d", compose->index);
         amplitude = scale(compose->composite_effect[compose->index].scale * VIBRATOR_MAX_AMPLITUDE, ff_dev->intensity);
-        VIBRATORINFO("scale %f, primitive %d", compose->composite_effect[compose->index].scale, compose->composite_effect[compose->index].primitive);
+        VIBRATORINFO("scale %f, primitive %d", compose->composite_effect[compose->index].scale, (int)compose->composite_effect[compose->index].primitive);
         if (amplitude != 0) {
             play_primitive(ff_dev, compose->composite_effect[compose->index].primitive, amplitude, (long*)&play_length);
         }
         compose->index++;
         uv_timer_start(&thread_args->timer, compose_timer_cb, play_length + compose->composite_effect[compose->index].delay_ms, 0);
-        VIBRATORINFO("play_length %d delay_ms %d", play_length, compose->composite_effect[compose->index].delay_ms);
+        VIBRATORINFO("play_length %d delay_ms %d", (int)play_length, (int)compose->composite_effect[compose->index].delay_ms);
     } else if (compose->repeat < 0) {
         VIBRATORINFO("repeat < 0, play compose exit");
     } else {
