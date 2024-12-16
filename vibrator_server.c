@@ -647,7 +647,7 @@ static void compose_timer_cb(uv_timer_t* timer)
     threadargs* thread_args = timer->data;
     vibrator_compose_t* compose = &thread_args->composition;
     ff_dev_t* ff_dev = thread_args->ff_dev;
-    int32_t play_length;
+    int32_t play_length = 0;
     uint8_t amplitude;
 
     uv_timer_stop(timer);
