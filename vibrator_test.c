@@ -209,7 +209,7 @@ static int test_calibrate(void)
 
 static int test_set_calibvalue(void)
 {
-    uint8_t value[32] = { 0 };
+    uint8_t value[PROP_VALUE_MAX] = { 0 };
     int ret;
 
     ret = property_get("calibvalue.testkey", (char*)value, "no_value");
