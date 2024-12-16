@@ -916,7 +916,7 @@ static int receive_get_capabilities(ff_dev_t* ff_dev, int32_t* capabilities)
 static int vibrator_init(ff_dev_t* ff_dev)
 {
     unsigned char ffbitmask[1 + FF_MAX / 8 / sizeof(unsigned char)];
-    uint8_t calib_data[32];
+    uint8_t calib_data[PROP_VALUE_MAX];
     int ret;
 
     ff_dev->curr_app_id = VIBRATOR_INVALID_VALUE;
