@@ -651,25 +651,25 @@ static void compose_timer_cb(uv_timer_t* timer)
     uint8_t amplitude;
 
     uv_timer_stop(timer);
-    VIBRATORINFO("%s index %d length %d repeat %d", __func__, compose->index, compose->length, compose->repeat);
 
-    if (compose->index < compose->length) {
-        VIBRATORINFO("index(count) = %d", compose->index);
-        amplitude = scale(compose->composite_effect[compose->index].scale * VIBRATOR_MAX_AMPLITUDE, ff_dev->intensity);
-        VIBRATORINFO("scale %f, primitive %d", compose->composite_effect[compose->index].scale, (int)compose->composite_effect[compose->index].primitive);
-        if (amplitude != 0) {
-            play_primitive(ff_dev, compose->composite_effect[compose->index].primitive, amplitude, (long*)&play_length);
-        }
-        compose->index++;
-        uv_timer_start(&thread_args->timer, compose_timer_cb, play_length + compose->composite_effect[compose->index].delay_ms, 0);
-        VIBRATORINFO("play_length %d delay_ms %d", (int)play_length, (int)compose->composite_effect[compose->index].delay_ms);
-    } else if (compose->repeat < 0) {
-        VIBRATORINFO("repeat < 0, play compose exit");
-    } else {
-        compose->index = compose->repeat;
-        uv_timer_start(&thread_args->timer, compose_timer_cb,
-            compose->composite_effect[compose->index].delay_ms, 0);
+    VIBRATORINFO("index(count) = %d", compose->index);
+    amplitude = scale(compose->composite_effect[compose->index].scale * VIBRATOR_MAX_AMPLITUDE, ff_dev->intensity);
+    VIBRATORINFO("scale %f, primitive %d", compose->composite_effect[compose->index].scale, (int)compose->composite_effect[compose->index].primitive);
+    if (amplitude != 0) {
+        play_primitive(ff_dev, compose->composite_effect[compose->index].primitive, amplitude, (long*)&play_length);
     }
+
+    compose->index++;
+    if (compose->index == compose->length) {
+        if (compose->repeat < 0) {
+            VIBRATORINFO("repeat < 0, play compose exit");
+            return;
+        }
+        VIBRATORINFO("repeat from index %d", compose->repeat);
+        compose->index = compose->repeat;
+    }
+    uv_timer_start(&thread_args->timer, compose_timer_cb, play_length + compose->composite_effect[compose->index].delay_ms, 0);
+    VIBRATORINFO("play_length %d delay_ms %d", (int)play_length, (int)compose->composite_effect[compose->index].delay_ms);
 }
 
 /****************************************************************************
