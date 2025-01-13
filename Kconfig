@@ -17,6 +17,7 @@
 config VIBRATOR
 	bool "vibrator"
 	depends on NET_RPMSG || NET_LOCAL
+	depends on LIBUV
 	default n
 
 if VIBRATOR
