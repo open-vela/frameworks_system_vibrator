@@ -91,6 +91,8 @@ enum {
     VIBRATION_GET_INTENSITY,
     VIBRATION_CALIBRATE,
     VIBRATION_SET_CALIBVALUE,
+    VIBRATION_SET_DISABLE,
+    VIBRATION_IS_DISABLED,
 };
 
 /* struct vibrator_waveform_t
@@ -148,6 +150,7 @@ typedef struct {
     uint8_t response_len;
     uint8_t padding;
     union {
+        uint8_t disable;
         uint8_t intensity;
         uint8_t amplitude;
         uint32_t timeoutms;

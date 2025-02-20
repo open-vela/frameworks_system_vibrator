@@ -366,11 +366,51 @@ int vibrator_set_intensity(vibrator_intensity_e intensity)
 {
     vibrator_msg_t buffer;
 
-    if (intensity < VIBRATION_INTENSITY_LOW || intensity > VIBRATION_INTENSITY_OFF)
+    if (intensity < VIBRATION_INTENSITY_LOW || intensity > VIBRATION_INTENSITY_HIGH)
         return -EINVAL;
 
     buffer.type = VIBRATION_SET_INTENSITY;
     buffer.intensity = intensity;
+
+    return vibrator_commit(&buffer);
+}
+
+/**
+ * @brief Get vibration is disabled or not.
+ *
+ * @param disabled Buffer that stores disabled status.
+ * @return Returns the flag indicating success in getting vibrator
+ *         disabled status. Greater than or equal to 0 means success;
+ *         otherwise, it means failure.
+ */
+int vibrator_is_disabled(uint8_t* disabled)
+{
+    vibrator_msg_t buffer;
+    int ret;
+
+    buffer.type = VIBRATION_IS_DISABLED;
+
+    ret = vibrator_commit(&buffer);
+    if (ret >= 0)
+        *disabled = buffer.disable;
+
+    return ret;
+}
+
+/**
+ * @brief Set vibration disable or not.
+ *
+ * @param disable The vibration disable flag.
+ * @return Returns the flag indicating success in setting vibrator
+ *         disabled status. Greater than or equal to 0 means success;
+ *         otherwise, it means failure.
+ */
+int vibrator_set_disable(uint8_t disable)
+{
+    vibrator_msg_t buffer;
+
+    buffer.type = VIBRATION_SET_DISABLE;
+    buffer.disable = !!disable;
 
     return vibrator_commit(&buffer);
 }
