@@ -49,6 +49,7 @@
 #define VIBRATOR_MAX_CLIENTS 16
 #define VIBRATOR_MAX_AMPLITUDE 255
 #define VIBRATOR_DEFAULT_AMPLITUDE -1
+#define VIBRATOR_DEFAULT_DISABLE false
 #define VIBRATOR_INVALID_VALUE -1
 #define VIBRATOR_STRONG_MAGNITUDE 0x7fff
 #define VIBRATOR_MEDIUM_MAGNITUDE 0x5fff
@@ -56,7 +57,7 @@
 #define VIBRATOR_CUSTOM_DATA_LEN 3
 #define VIBRATOR_DEV_FS "/dev/lra0"
 #define KVDB_KEY_VIBRATOR_MODE "persist.vibration.mode"
-#define KVDB_KEY_VIBRATOR_ENABLE "persist.vibration_enable"
+#define KVDB_KEY_VIBRATOR_DISABLE "persist.vibration_disable"
 #define KVDB_KEY_VIBRATOR_CALIB "ro.factory.motor_calib"
 
 /****************************************************************************
@@ -70,6 +71,7 @@ typedef struct {
     uint8_t curr_amplitude;
     int32_t capabilities;
     vibrator_intensity_e intensity;
+    uint8_t disabled;
 } ff_dev_t;
 
 typedef struct {
@@ -460,18 +462,16 @@ static int scale(int amplitude, vibrator_intensity_e intensity)
  *    confirm whether vibration is allowed.
  *
  * Input Parameters:
- *   intensity - vibration intensity
+ *   disabled - vibration disabled flag
  *
  * Returned Value:
  *   true: allowed, false: not allowed
  *
  ****************************************************************************/
 
-static bool should_vibrate(vibrator_intensity_e intensity)
+static bool should_vibrate(uint8_t disabled)
 {
-    if (intensity == VIBRATION_INTENSITY_OFF)
-        return false;
-    return true;
+    return !disabled;
 }
 
 /****************************************************************************
@@ -548,7 +548,7 @@ static int receive_start(ff_dev_t* ff_dev, uint32_t timeoutms)
     int scale_amplitude;
     int ret;
 
-    if (!should_vibrate(ff_dev->intensity))
+    if (!should_vibrate(ff_dev->disabled))
         return -ENOTSUP;
 
     scale_amplitude = scale(ff_dev->curr_amplitude, ff_dev->intensity);
@@ -621,7 +621,7 @@ static int receive_waveform(void* args)
 
     wave->count = 0;
 
-    if (!should_vibrate(thread_args->ff_dev->intensity))
+    if (!should_vibrate(thread_args->ff_dev->disabled))
         return -ENOTSUP;
 
     if (!should_repeat(wave->repeat, wave->timings,
@@ -690,7 +690,7 @@ static int receive_compose(void* args)
 
     compose->index = 0;
 
-    if (!should_vibrate(thread_args->ff_dev->intensity))
+    if (!should_vibrate(thread_args->ff_dev->disabled))
         return -ENOTSUP;
 
     return uv_timer_start(&thread_args->timer, compose_timer_cb,
@@ -762,7 +762,7 @@ static int receive_predefined(ff_dev_t* ff_dev, vibrator_effect_t* eff)
     int32_t play_length;
     int ret;
 
-    if (!should_vibrate(ff_dev->intensity))
+    if (!should_vibrate(ff_dev->disabled))
         return -ENOTSUP;
 
     ret = play_effect(ff_dev, eff->effect_id, eff->es, (long*)&play_length);
@@ -793,7 +793,7 @@ static int receive_primitive(ff_dev_t* ff_dev, vibrator_effect_t* eff)
     int32_t play_length;
     int ret;
 
-    if (!should_vibrate(ff_dev->intensity))
+    if (!should_vibrate(ff_dev->disabled))
         return -ENOTSUP;
 
     ret = play_primitive(ff_dev, eff->effect_id, eff->amplitude, (long*)&play_length);
@@ -854,6 +854,48 @@ static int receive_get_intensity(ff_dev_t* ff_dev,
     ff_dev->intensity = property_get_int32(KVDB_KEY_VIBRATOR_MODE,
         ff_dev->intensity);
     *intensity = ff_dev->intensity;
+    return OK;
+}
+
+/****************************************************************************
+ * Name: receive_set_disable()
+ *
+ * Description:
+ *   recevice set vibrator disable operation from vibrator_upper file
+ *
+ * Input Parameters:
+ *   ff_dev - structure for operating the ff device driver
+ *   disable - vibration disable
+ *
+ * Returned Value:
+ *   return the ret of write
+ *
+ ****************************************************************************/
+
+static int receive_set_disable(ff_dev_t* ff_dev, uint8_t disable)
+{
+    ff_dev->disabled = disable;
+    return property_set_bool(KVDB_KEY_VIBRATOR_DISABLE, !!disable);
+}
+
+/****************************************************************************
+ * Name: receive_is_disabled()
+ *
+ * Description:
+ *   recevice get vibrator disabled operation from vibrator_upper file
+ *
+ * Input Parameters:
+ *   ff_dev - structure for operating the ff device driver
+ *   disable - vibration disable
+ *
+ * Returned Value:
+ *   return OK(success)
+ *
+ ****************************************************************************/
+
+static int receive_is_disabled(ff_dev_t* ff_dev, uint8_t* disable)
+{
+    *disable = ff_dev->disabled;
     return OK;
 }
 
@@ -921,7 +963,8 @@ static int vibrator_init(ff_dev_t* ff_dev)
 
     ff_dev->curr_app_id = VIBRATOR_INVALID_VALUE;
     ff_dev->curr_magnitude = VIBRATOR_STRONG_MAGNITUDE;
-    ff_dev->intensity = VIBRATION_INTENSITY_OFF;
+    ff_dev->intensity = VIBRATION_INTENSITY_HIGH;
+    ff_dev->disabled = VIBRATOR_DEFAULT_DISABLE;
     ff_dev->curr_amplitude = VIBRATOR_MAX_AMPLITUDE;
     ff_dev->capabilities = 0;
 
@@ -951,6 +994,8 @@ static int vibrator_init(ff_dev_t* ff_dev)
 
     ff_dev->intensity = property_get_int32(KVDB_KEY_VIBRATOR_MODE,
         ff_dev->intensity);
+    ff_dev->disabled = property_get_bool(KVDB_KEY_VIBRATOR_DISABLE,
+        ff_dev->disabled);
 
     ret = property_get(KVDB_KEY_VIBRATOR_CALIB, (char*)calib_data, "no_value");
     if (ret < 0 || strcmp((char*)calib_data, "no_value") == 0) {
@@ -1043,6 +1088,16 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     case VIBRATION_GET_INTENSITY: {
         ret = receive_get_intensity(ff_dev, (vibrator_intensity_e*)&msg->intensity);
         VIBRATORINFO("receive get intensity = %d", msg->intensity);
+        break;
+    }
+    case VIBRATION_IS_DISABLED: {
+        ret = receive_is_disabled(ff_dev, &msg->disable);
+        VIBRATORINFO("receive is disable = %d", ret);
+        break;
+    }
+    case VIBRATION_SET_DISABLE: {
+        ret = receive_set_disable(ff_dev, msg->disable);
+        VIBRATORINFO("receive set disable = %d", ret);
         break;
     }
     case VIBRATION_SET_AMPLITUDE: {

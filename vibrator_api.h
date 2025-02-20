@@ -71,7 +71,6 @@ typedef enum {
     VIBRATION_INTENSITY_LOW = 0, /**< Low intensity */
     VIBRATION_INTENSITY_MEDIUM = 1, /**< Medium intensity */
     VIBRATION_INTENSITY_HIGH = 2, /**< High intensity */
-    VIBRATION_INTENSITY_OFF = 3 /**< No vibration (off) */
 } vibrator_intensity_e;
 
 /**
@@ -183,6 +182,26 @@ int vibrator_get_intensity(vibrator_intensity_e* intensity);
  *         Greater than or equal to 0 means success; otherwise, it means failure.
  */
 int vibrator_set_intensity(vibrator_intensity_e intensity);
+
+/**
+ * @brief Get vibration is disabled or not.
+ *
+ * @param disabled Buffer that stores disabled status.
+ * @return Returns the flag indicating success in getting vibrator
+ *         disabled status. Greater than or equal to 0 means success;
+ *         otherwise, it means failure.
+ */
+int vibrator_is_disabled(uint8_t* disabled);
+
+/**
+ * @brief Set vibration disable or not.
+ *
+ * @param disable The vibration disable flag.
+ * @return Returns the flag indicating success in setting vibrator
+ *         disabled status. Greater than or equal to 0 means success;
+ *         otherwise, it means failure.
+ */
+int vibrator_set_disable(uint8_t disable);
 
 /**
  * @brief Cancel the vibration.

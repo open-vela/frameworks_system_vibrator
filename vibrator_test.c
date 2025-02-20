@@ -41,6 +41,7 @@
 #define VIBRATOR_TEST_COMPOSE_MAX 4
 #define VIBRATOR_TEST_DEFAULT_INTERVAL 1000
 #define VIBRATOR_TEST_DEFAULT_COUNT 5
+#define VIBRATOR_TEST_DEFAULT_DISABLED false
 
 /****************************************************************************
  * Private Types
@@ -69,6 +70,7 @@ struct vibrator_test_s {
     int composeid;
     int interval;
     int count;
+    int disable;
     struct waveform_arrays_s waveform_args[VIBRATOR_TEST_WAVEFORM_MAX];
     struct compose_arrays_s compose_args[VIBRATOR_TEST_COMPOSE_MAX];
 };
@@ -88,6 +90,8 @@ enum vibrator_test_apino_e {
     VIBRATOR_TEST_CALIBRATE,
     VIBRATOR_TEST_SET_CALIBVALUE,
     VIBRATOR_TEST_COMPOSE,
+    VIBRATOR_TEST_SET_DISABLE,
+    VIBRATOR_TEST_IS_DISABLED
 };
 
 /****************************************************************************
@@ -111,7 +115,8 @@ static void usage(void)
            "\t[-l <val> ] The waveform array id, [0, 6], default: 0\n"
            "\t[-p <val> ] The compose array id, [0, 3], default: 0\n"
            "\t[-d <val> ] The interval of vibration in milliseconds, default: 1000\n"
-           "\t[-c <val> ] The count of vibration, default: 5\n");
+           "\t[-c <val> ] The count of vibration, default: 5\n"
+           "\t[-b <val> ] The disabled flag, [0, 1] default: false\n");
 }
 
 static int test_play_predefined(uint8_t id, vibrator_effect_strength_e es)
@@ -166,6 +171,29 @@ static int test_get_intensity(void)
     ret = vibrator_get_intensity(&intensity);
     if (ret >= 0)
         printf("vibrator server reporting current intensity: %d\n", intensity);
+
+    return ret;
+}
+
+static int test_is_disabled(void)
+{
+    uint8_t disabled;
+    int ret;
+
+    ret = vibrator_is_disabled(&disabled);
+    if (ret >= 0)
+        printf("vibrator server reporting disabled: %d\n", disabled);
+
+    return ret;
+}
+
+static int test_set_disable(bool disable)
+{
+    int ret;
+
+    ret = vibrator_set_disable(disable);
+    if (ret >= 0)
+        printf("vibrator server set disable: %d\n", disable);
 
     return ret;
 }
@@ -309,6 +337,11 @@ static int param_parse(int argc, char* argv[],
             }
             break;
         }
+        case 'b': {
+            test_data->disable = atoi(optarg);
+            printf("test_data->disable = %d\n", test_data->disable);
+            break;
+        }
         case 'h':
         default: {
             return -1;
@@ -415,6 +448,22 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
         ret = test_get_intensity();
         if (ret < 0) {
             printf("get_intensity failed: %d\n", ret);
+            return ret;
+        }
+        break;
+    case VIBRATOR_TEST_SET_DISABLE:
+        printf("API TEST: vibrator_set_disable\n");
+        ret = test_set_disable(test_data->disable);
+        if (ret < 0) {
+            printf("set_disable failed: %d\n", ret);
+            return ret;
+        }
+        break;
+    case VIBRATOR_TEST_IS_DISABLED:
+        printf("API TEST: vibrator_is_disabled\n");
+        ret = test_is_disabled();
+        if (ret < 0) {
+            printf("is_disabled failed: %d\n", ret);
             return ret;
         }
         break;
@@ -572,6 +621,7 @@ int main(int argc, char* argv[])
     /*Init test data using default value*/
 
     test_data.intensity = VIBRATOR_TEST_DEFAULT_INTENSITY;
+    test_data.disable = VIBRATOR_TEST_DEFAULT_DISABLED;
     test_data.amplitude = VIBRATOR_TEST_DEFAULT_AMPLITUDE;
     test_data.effectid = VIBRATOR_TEST_DEFAULT_EFFECT_ID;
     test_data.repeat = VIBRATOR_TEST_DEFAULT_REPEAT;
