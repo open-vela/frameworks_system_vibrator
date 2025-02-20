@@ -55,7 +55,7 @@
 #define VIBRATOR_LIGHT_MAGNITUDE 0x3fff
 #define VIBRATOR_CUSTOM_DATA_LEN 3
 #define VIBRATOR_DEV_FS "/dev/lra0"
-#define KVDB_KEY_VIBRATOR_MODE "persist.vibrator_mode"
+#define KVDB_KEY_VIBRATOR_MODE "persist.vibration.mode"
 #define KVDB_KEY_VIBRATOR_ENABLE "persist.vibration_enable"
 #define KVDB_KEY_VIBRATOR_CALIB "ro.factory.motor_calib"
 
