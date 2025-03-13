@@ -420,6 +420,52 @@ static int off(ff_dev_t* ff_dev)
 }
 
 /****************************************************************************
+ * Name: get_primitive_duration()
+ *
+ * Description:
+ *    get the duration of the predefined effect with the specified id.
+ *
+ * Input Parameters:
+ *   ff_dev - structure for operating the ff device driver
+ *   effect_id - ID of the predefined effect.
+ *   duration - the duration of the predefined effect in ms.
+ *
+ * Returned Value:
+ *   return the ret of ioctl
+ *
+ ****************************************************************************/
+
+static int get_primitive_duration(ff_dev_t* ff_dev, int effect_id,
+    int32_t* duration)
+{
+    int16_t data[VIBRATOR_CUSTOM_DATA_LEN] = { 0, 0, 0 };
+    struct ff_effect effect;
+    int ret;
+
+    memset(&effect, 0, sizeof(effect));
+
+    data[0] = effect_id;
+    effect.type = FF_PERIODIC;
+    effect.u.periodic.waveform = FF_CUSTOM;
+    effect.u.periodic.custom_data = data;
+    effect.u.periodic.custom_len = sizeof(int16_t) * VIBRATOR_CUSTOM_DATA_LEN;
+
+    ret = ioctl(ff_dev->fd, EVIOCGDURATION, &effect);
+    if (ret < 0) {
+        VIBRATORERR("ioctl EVIOCGDURATION failed, errno = %d", errno);
+        return ret;
+    }
+
+    /* return the effect play length to vibrator service */
+
+    if (duration != NULL) {
+        *duration = data[1] * 1000 + data[2];
+    }
+
+    return ret;
+}
+
+/****************************************************************************
  * Name: scale()
  *
  * Description:
@@ -1103,6 +1149,12 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     case VIBRATION_SET_AMPLITUDE: {
         ret = receive_set_amplitude(ff_dev, msg->amplitude);
         VIBRATORINFO("receive set amplitude = %d", ret);
+        break;
+    }
+    case VIBRATION_GET_DURATION: {
+        ret = get_primitive_duration(ff_dev, msg->effect.effect_id,
+            &msg->effect.play_length);
+        VIBRATORINFO("receive get duration = %d", (int)msg->effect.play_length);
         break;
     }
     case VIBRATION_GET_CAPABLITY: {
