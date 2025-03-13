@@ -93,6 +93,7 @@ enum {
     VIBRATION_SET_CALIBVALUE,
     VIBRATION_SET_DISABLE,
     VIBRATION_IS_DISABLED,
+    VIBRATION_GET_DURATION,
 };
 
 /* struct vibrator_waveform_t

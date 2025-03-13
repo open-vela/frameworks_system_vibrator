@@ -335,6 +335,29 @@ int vibrator_play_primitive(uint8_t effect_id, float amplitude,
 }
 
 /**
+ * @brief Get vibration primitive effect duration.
+ *
+ * @param effect_id The ID of the effect.
+ * @param duration BUffer that stores the effect duration.
+ * @return Returns the flag indicating success in getting vibrator duration.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
+int vibrator_get_primitive_duration(uint8_t effect_id, int32_t* duration)
+{
+    vibrator_msg_t buffer;
+    int ret;
+
+    buffer.type = VIBRATION_GET_DURATION;
+    buffer.effect.effect_id = effect_id;
+
+    ret = vibrator_commit(&buffer);
+    if (ret >= 0)
+        *duration = buffer.effect.play_length;
+
+    return ret;
+}
+
+/**
  * @brief Get vibration intensity.
  *
  * @param intensity Buffer that stores intensity.

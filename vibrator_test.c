@@ -91,7 +91,8 @@ enum vibrator_test_apino_e {
     VIBRATOR_TEST_SET_CALIBVALUE,
     VIBRATOR_TEST_COMPOSE,
     VIBRATOR_TEST_SET_DISABLE,
-    VIBRATOR_TEST_IS_DISABLED
+    VIBRATOR_TEST_IS_DISABLED,
+    VIBRATOR_TEST_GETDURATION
 };
 
 /****************************************************************************
@@ -249,6 +250,18 @@ static int test_set_calibvalue(void)
     }
 
     return vibrator_set_calibvalue(value);
+}
+
+static int test_get_primitive_duration(int effectid)
+{
+    int32_t duration;
+    int ret;
+
+    ret = vibrator_get_primitive_duration(effectid, &duration);
+    if (ret >= 0)
+        printf("Effectid %d play length: %" PRIi32 "\n", effectid, duration);
+
+    return ret;
 }
 
 static int param_parse(int argc, char* argv[],
@@ -488,6 +501,14 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
         ret = test_set_calibvalue();
         if (ret < 0) {
             printf("set_calibvalue failed: %d\n", ret);
+            return ret;
+        }
+        break;
+    case VIBRATOR_TEST_GETDURATION:
+        printf("API TEST: vibrator_get_primitive_duration\n");
+        ret = test_get_primitive_duration(test_data->effectid);
+        if (ret < 0) {
+            printf("get_primitive_duration failed: %d\n", ret);
             return ret;
         }
         break;

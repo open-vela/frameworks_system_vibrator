@@ -239,6 +239,16 @@ int vibrator_set_amplitude(uint8_t amplitude);
 int vibrator_get_capabilities(int32_t* capabilities);
 
 /**
+ * @brief Get vibration primitive effect duration.
+ *
+ * @param effect_id The ID of the effect.
+ * @param duration BUffer that stores the effect duration.
+ * @return Returns the flag indicating success in getting vibrator duration.
+ *         Greater than or equal to 0 means success; otherwise, it means failure.
+ */
+int vibrator_get_primitive_duration(uint8_t effect_id, int32_t* duration);
+
+/**
  * @brief Calibrate vibrator when it is not calibrated, Generally at the time of leaving the factory.
  *
  * @param data Buffer that stores the calibration result data.
