@@ -85,6 +85,20 @@ typedef struct {
     float scale; /**< Scale factor for the primitive effect, 0.0-1.0 */
 } vibrator_composite_effect_t;
 
+/**
+ * @brief Vibration callback function type.
+ *
+ * This function is called when the async vibration operation is completed.
+ *
+ * @param handle The handle of the long-term connection to the vibrator.
+ * @param cookie The user-defined data passed to the vibration function.
+ * @param arg The argument passed to the user-defined callback function.
+ * @param ret The result of the vibration operation. 0 means success,
+ *            negative value means failure.
+ */
+typedef void (*vibrator_uv_callback)(void* handle, void* cookie,
+    void* arg, int ret);
+
 /****************************************************************************
  * @brief Public Function Prototypes
  ****************************************************************************/
@@ -265,6 +279,37 @@ int vibrator_calibrate(uint8_t* data);
  *         Greater than or equal to 0 means success; otherwise, it means failure.
  */
 int vibrator_set_calibvalue(uint8_t* data);
+
+/**
+ * @brief Asynchronously sends a request to play a predefined vibration effect to
+ *        the vibrator server over an established long connection.
+ *
+ * @param handle The handle to use for the connection.
+ * @param effect_id The ID of the predefined vibration effect to be played.
+ * @param es The strength of the vibration effect.
+ * @param cb The callback function to be called when the request is sent.
+ *
+ * @return Returns 0 on success, or a negative error code on failure.
+ */
+int vibrator_uv_play_predefined(void* handle, uint8_t effect_id,
+    vibrator_effect_strength_e es, vibrator_uv_callback cb);
+
+/**
+ * @brief Build a long-term connection with the vibrator server async.
+ *
+ * @param on_connect The callback function to be called when the connection
+ *                   is established.
+ * @param cookie     Long-term context, for on_connect.
+ * @return Returns handle to the pipe on success, or NULL on failure.
+ */
+void* vibrator_uv_connect(vibrator_uv_callback on_connect, void* cookie);
+
+/**
+ * @brief Disconnect the connection.
+ *
+ * @param handle The handle to the pipe to be disconnected.
+ */
+void vibrator_uv_disconnect(void* handle);
 
 #ifdef __cplusplus
 }

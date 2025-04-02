@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <uv.h>
 
 #include <vibrator_api.h>
 
@@ -92,7 +93,8 @@ enum vibrator_test_apino_e {
     VIBRATOR_TEST_COMPOSE,
     VIBRATOR_TEST_SET_DISABLE,
     VIBRATOR_TEST_IS_DISABLED,
-    VIBRATOR_TEST_GETDURATION
+    VIBRATOR_TEST_GETDURATION,
+    VIBRATOR_TEST_LONG_CONNECT
 };
 
 /****************************************************************************
@@ -262,6 +264,53 @@ static int test_get_primitive_duration(int effectid)
         printf("Effectid %d play length: %" PRIi32 "\n", effectid, duration);
 
     return ret;
+}
+
+static void on_playpredefined(void* handle, void* cookie, void* arg, int ret)
+{
+    uint32_t* length = arg;
+    printf("on_playpredefined ret = %d, length = %" PRIu32 "\n", ret, *length);
+
+    vibrator_uv_disconnect(handle);
+    return;
+}
+
+static void on_open(void* handle, void* cookie, void* arg, int ret)
+{
+    struct vibrator_test_s* test_data = cookie;
+    int32_t duration = 0;
+    printf("on_open status = %d\n", ret);
+
+    ret = vibrator_get_primitive_duration(test_data->effectid, &duration);
+    if (ret >= 0) {
+        printf("Effectid %d play length: %" PRIi32 "\n", test_data->effectid, duration);
+    } else {
+        printf("get effectid %d duration failed, ret = %d\n", test_data->effectid, ret);
+    }
+
+    ret = vibrator_uv_play_predefined(handle, test_data->effectid, test_data->es, on_playpredefined);
+    if (ret < 0) {
+        printf("play predefined effect failed, ret = %d\n", ret);
+        return;
+    }
+}
+
+static int test_long_connection_case(struct vibrator_test_s* test_data)
+{
+    uv_loop_t* loop = uv_default_loop();
+    void* handle;
+
+    handle = vibrator_uv_connect(on_open, test_data);
+    if (handle == NULL) {
+        printf("open vibrator failed, errno = %d", errno);
+        return -1;
+    }
+
+    uv_run(loop, UV_RUN_DEFAULT);
+
+    printf("uv_run done\n");
+    uv_loop_close(loop);
+    return 0;
 }
 
 static int param_parse(int argc, char* argv[],
@@ -509,6 +558,14 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
         ret = test_get_primitive_duration(test_data->effectid);
         if (ret < 0) {
             printf("get_primitive_duration failed: %d\n", ret);
+            return ret;
+        }
+        break;
+    case VIBRATOR_TEST_LONG_CONNECT:
+        printf("API TEST: vibrator_under_long_connection\n");
+        ret = test_long_connection_case(test_data);
+        if (ret < 0) {
+            printf("vibrator_under_long_connection failed: %d\n", ret);
             return ret;
         }
         break;
