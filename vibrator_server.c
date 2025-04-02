@@ -1195,9 +1195,11 @@ static void connection_poll_cb(uv_poll_t* handle, int status, int events)
         if (ret >= msg->request_len) {
             VIBRATORINFO("recv client: recv len = %d, type = %d", ret, msg->type);
             msg->result = vibrator_mode_select(msg, ctx->thread_args);
-            ret = send(ctx->sock, msg, msg->response_len, 0);
-            if (ret < 0) {
-                VIBRATORERR("send fail, errno = %d", errno);
+            if (msg->response_len > 0) {
+                ret = send(ctx->sock, msg, msg->response_len, 0);
+                if (ret < 0) {
+                    VIBRATORERR("send fail, errno = %d", errno);
+                }
             }
         }
     }

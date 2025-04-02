@@ -28,8 +28,39 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <uv.h>
 
 #include "vibrator_internal.h"
+
+/****************************************************************************
+ * Private Types
+ ****************************************************************************/
+
+/* struct vibrator_pipe_t
+ * @loop: the loop of uv
+ * @handle: the handle of pipe
+ * @connect_req: the connect request of pipe
+ * @write_req: the write request of pipe
+ * @shutdown_req: the shutdown request of pipe
+ * @on_connect: the callback function when connect to vibrator server
+ * @on_read: the callback function when read from vibrator server
+ * @cookie: Long-term private context
+ * @msg: the vibrator_msg_t of above structure
+ * @on_read_pending: the flag of read pending
+ */
+
+typedef struct {
+    uv_loop_t* loop;
+    uv_pipe_t handle;
+    uv_connect_t connect_req;
+    uv_write_t write_req;
+    uv_shutdown_t shutdown_req;
+    vibrator_uv_callback on_connect;
+    vibrator_uv_callback on_read;
+    void* cookie;
+    vibrator_msg_t msg;
+    int on_read_pending;
+} vibrator_pipe_t;
 
 /****************************************************************************
  * @brief Private Functions
@@ -159,6 +190,95 @@ static int vibrator_commit(vibrator_msg_t* buffer)
 errout:
     close(fd);
     return ret;
+}
+
+/**
+ * @brief callback functions for uv operations
+ */
+
+static void vibrator_uv_close_cb(uv_handle_t* handle)
+{
+    vibrator_pipe_t* pipe = uv_handle_get_data(handle);
+    free(pipe);
+}
+
+static void vibrator_uv_close(void* handle)
+{
+    uv_read_stop((uv_stream_t*)handle);
+    if (!uv_is_closing((uv_handle_t*)handle)) {
+        uv_close((uv_handle_t*)handle, vibrator_uv_close_cb);
+    }
+}
+
+static void vibrator_uv_shutdown_cb(uv_shutdown_t* req, int status)
+{
+    vibrator_pipe_t* pipe = uv_handle_get_data((uv_handle_t*)req->handle);
+    vibrator_uv_close(&pipe->handle);
+}
+
+static void vibrator_uv_write_cb(uv_write_t* req, int status)
+{
+    vibrator_pipe_t* pipe = uv_handle_get_data((uv_handle_t*)req->handle);
+    if (pipe->on_read == NULL) {
+        pipe->on_read_pending = 0;
+    }
+}
+
+static void vibrator_uv_alloc_cb(uv_handle_t* handle,
+    size_t suggested_size, uv_buf_t* buf)
+{
+    vibrator_pipe_t* pipe = uv_handle_get_data(handle);
+    buf->base = (char*)&pipe->msg;
+    buf->len = pipe->msg.response_len;
+}
+
+static void vibrator_uv_read_cb(uv_stream_t* stream, ssize_t nread,
+    const uv_buf_t* buf)
+{
+    vibrator_pipe_t* pipe = uv_handle_get_data((uv_handle_t*)stream);
+
+    if (nread == 0)
+        return;
+
+    if (nread < 0) {
+        VIBRATORERR("client: read failure, errno = %d", errno);
+        vibrator_uv_close(&pipe->handle);
+        return;
+    }
+
+    if (pipe->on_read) {
+        vibrator_msg_t* msg = (vibrator_msg_t*)buf->base;
+        void* arg = NULL;
+        int ret = msg->result;
+        switch (msg->type) {
+        case VIBRATION_EFFECT:
+            arg = &msg->effect.play_length;
+            break;
+        default:
+            break;
+        }
+        pipe->on_read(&pipe->handle, pipe->cookie, arg, ret);
+    }
+
+    pipe->on_read_pending = 0;
+    VIBRATORINFO("client: read success, nread = %d", nread);
+}
+
+static void vibrator_uv_connect_cb(uv_connect_t* req, int status)
+{
+    vibrator_pipe_t* pipe = uv_handle_get_data((uv_handle_t*)req->handle);
+
+    if (pipe->on_connect) {
+        pipe->on_connect(&pipe->handle, pipe->cookie, NULL, status);
+    }
+
+    if (status < 0) {
+        VIBRATORERR("client: connect failure, uv_errno_name(status) = %s", uv_err_name(status));
+        vibrator_uv_close(&pipe->handle);
+        return;
+    }
+
+    VIBRATORINFO("client: connect success");
 }
 
 /****************************************************************************
@@ -546,4 +666,118 @@ int vibrator_set_calibvalue(uint8_t* data)
     memcpy(buffer.calibvalue, data, VIBRATOR_CALIBVALUE_MAX);
 
     return vibrator_commit(&buffer);
+}
+
+/**
+ * @brief Build a long-term connection with the vibrator server async.
+ *
+ * @param on_connect The callback function to be called when the connection
+ *                   is established.
+ * @param cookie     Long-term context, for on_connect.
+ * @return Returns handle to the pipe on success, or NULL on failure.
+ */
+void* vibrator_uv_connect(vibrator_uv_callback on_connect, void* cookie)
+{
+    vibrator_pipe_t* pipe;
+    int ret;
+
+    pipe = zalloc(sizeof(vibrator_pipe_t));
+    if (!pipe) {
+        VIBRATORERR("zalloc fail, err: %d", -ENOMEM);
+        return NULL;
+    }
+
+    pipe->loop = uv_default_loop();
+    ret = uv_pipe_init(pipe->loop, &pipe->handle, 0);
+    if (ret < 0) {
+        VIBRATORERR("uv_pipe_init fail, uv_errno_name(ret) = %s", uv_err_name(ret));
+        goto errout1;
+    }
+
+    pipe->on_connect = on_connect;
+    pipe->cookie = cookie;
+    uv_handle_set_data((uv_handle_t*)&pipe->handle, pipe);
+#ifdef CONFIG_VIBRATOR_SERVER
+    uv_pipe_connect(&pipe->connect_req, &pipe->handle,
+        PROP_SERVER_PATH, vibrator_uv_connect_cb);
+#else
+    uv_pipe_rpmsg_connect(&pipe->connect_req, &pipe->handle,
+        PROP_SERVER_PATH, CONFIG_VIBRATOR_SERVER_CPUNAME,
+        vibrator_uv_connect_cb);
+#endif
+    ret = uv_read_start((uv_stream_t*)&pipe->handle,
+        vibrator_uv_alloc_cb, vibrator_uv_read_cb);
+    if (ret < 0) {
+        VIBRATORERR("uv_read_start fail, uv_errno_name(ret) = %s", uv_err_name(ret));
+        goto errout2;
+    }
+
+    return &pipe->handle;
+
+errout2:
+    uv_close((uv_handle_t*)&pipe->handle, NULL);
+errout1:
+    free(pipe);
+    return NULL;
+}
+
+/**
+ * @brief Disconnect the connection.
+ *
+ * @param handle The handle to the pipe to be disconnected.
+ */
+
+void vibrator_uv_disconnect(void* handle)
+{
+    vibrator_pipe_t* pipe = uv_handle_get_data((uv_handle_t*)handle);
+
+    int ret = uv_shutdown(&pipe->shutdown_req, (uv_stream_t*)handle, vibrator_uv_shutdown_cb);
+    if (ret < 0) {
+        VIBRATORERR("uv_shutdown fail, uv_errno_name(ret) = %s", uv_err_name(ret));
+        vibrator_uv_close(handle);
+    }
+}
+
+/**
+ * @brief Asynchronously sends a request to play a predefined vibration effect to
+ *        the vibrator server over an established long connection.
+ *
+ * @param handle The handle to use for the connection.
+ * @param effect_id The ID of the predefined vibration effect to be played.
+ * @param es The strength of the vibration effect.
+ * @param cb The callback function to be called when the request is sent.
+ *
+ * @return Returns 0 on success, or a negative error code on failure.
+ */
+
+int vibrator_uv_play_predefined(void* handle, uint8_t effect_id,
+    vibrator_effect_strength_e es, vibrator_uv_callback cb)
+{
+    vibrator_pipe_t* pipe = uv_handle_get_data((uv_handle_t*)handle);
+    int ret = 0;
+
+    DEBUGASSERT(pipe->loop == uv_default_loop());
+    if (pipe->on_read_pending) {
+        VIBRATORERR("err: %d", -EBUSY);
+        return -EBUSY;
+    }
+
+    pipe->on_read_pending = 1;
+    pipe->msg.type = VIBRATION_EFFECT;
+    pipe->msg.effect.effect_id = effect_id;
+    pipe->msg.effect.es = es;
+    vibrator_msg_packet(&pipe->msg);
+    if (cb == NULL) {
+        pipe->msg.response_len = 0;
+    }
+
+    pipe->on_read = cb;
+    uv_buf_t send_buf = uv_buf_init((char*)&pipe->msg, pipe->msg.request_len);
+
+    ret = uv_write(&pipe->write_req, (uv_stream_t*)&pipe->handle, &send_buf, 1, vibrator_uv_write_cb);
+    if (ret < 0) {
+        VIBRATORERR("uv_write fail, uv_errno_name(ret) = %s", uv_err_name(ret));
+    }
+
+    return ret;
 }
