@@ -33,7 +33,7 @@ config VIBRATOR_SERVER_CPUNAME
 
 config VIBRATOR_PRIORITY
 	int "task priority"
-	default 100
+	default 200
 
 config VIBRATOR_STACKSIZE
 	int "stack size"
