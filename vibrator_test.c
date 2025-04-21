@@ -23,7 +23,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#ifdef CONFIG_VIBRATOR_UV_API
 #include <uv.h>
+#endif
 
 #include <vibrator_api.h>
 
@@ -94,7 +96,9 @@ enum vibrator_test_apino_e {
     VIBRATOR_TEST_SET_DISABLE,
     VIBRATOR_TEST_IS_DISABLED,
     VIBRATOR_TEST_GETDURATION,
+#ifdef CONFIG_VIBRATOR_UV_API
     VIBRATOR_TEST_LONG_CONNECT
+#endif
 };
 
 /****************************************************************************
@@ -266,6 +270,7 @@ static int test_get_primitive_duration(int effectid)
     return ret;
 }
 
+#ifdef CONFIG_VIBRATOR_UV_API
 static void on_playpredefined(void* handle, void* cookie, void* arg, int ret)
 {
     uint32_t* length = arg;
@@ -312,6 +317,7 @@ static int test_long_connection_case(struct vibrator_test_s* test_data)
     uv_loop_close(loop);
     return 0;
 }
+#endif
 
 static int param_parse(int argc, char* argv[],
     struct vibrator_test_s* test_data)
@@ -561,6 +567,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
             return ret;
         }
         break;
+#ifdef CONFIG_VIBRATOR_UV_API
     case VIBRATOR_TEST_LONG_CONNECT:
         printf("API TEST: vibrator_under_long_connection\n");
         ret = test_long_connection_case(test_data);
@@ -569,6 +576,7 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
             return ret;
         }
         break;
+#endif
     default:
         printf("arg out of range\n");
         break;

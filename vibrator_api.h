@@ -280,6 +280,7 @@ int vibrator_calibrate(uint8_t* data);
  */
 int vibrator_set_calibvalue(uint8_t* data);
 
+#ifdef CONFIG_VIBRATOR_UV_API
 /**
  * @brief Asynchronously sends a request to play a predefined vibration effect to
  *        the vibrator server over an established long connection.
@@ -310,6 +311,7 @@ void* vibrator_uv_connect(vibrator_uv_callback on_connect, void* cookie);
  * @param handle The handle to the pipe to be disconnected.
  */
 void vibrator_uv_disconnect(void* handle);
+#endif
 
 #ifdef __cplusplus
 }

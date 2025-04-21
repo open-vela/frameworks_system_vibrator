@@ -28,7 +28,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#ifdef CONFIG_VIBRATOR_UV_API
 #include <uv.h>
+#endif
 
 #include "vibrator_internal.h"
 
@@ -36,6 +38,7 @@
  * Private Types
  ****************************************************************************/
 
+#ifdef CONFIG_VIBRATOR_UV_API
 /* struct vibrator_pipe_t
  * @loop: the loop of uv
  * @handle: the handle of pipe
@@ -61,6 +64,7 @@ typedef struct {
     vibrator_msg_t msg;
     int on_read_pending;
 } vibrator_pipe_t;
+#endif
 
 /****************************************************************************
  * @brief Private Functions
@@ -192,6 +196,7 @@ errout:
     return ret;
 }
 
+#ifdef CONFIG_VIBRATOR_UV_API
 /**
  * @brief callback functions for uv operations
  */
@@ -280,6 +285,7 @@ static void vibrator_uv_connect_cb(uv_connect_t* req, int status)
 
     VIBRATORINFO("client: connect success");
 }
+#endif
 
 /****************************************************************************
  * @brief Public Functions
@@ -668,6 +674,7 @@ int vibrator_set_calibvalue(uint8_t* data)
     return vibrator_commit(&buffer);
 }
 
+#ifdef CONFIG_VIBRATOR_UV_API
 /**
  * @brief Build a long-term connection with the vibrator server async.
  *
@@ -781,3 +788,4 @@ int vibrator_uv_play_predefined(void* handle, uint8_t effect_id,
 
     return ret;
 }
+#endif
