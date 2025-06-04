@@ -52,7 +52,11 @@
 #define VIBRATOR_DEFAULT_DISABLE false
 #define VIBRATOR_INVALID_VALUE -1
 #define VIBRATOR_STRONG_MAGNITUDE 0x7fff
-#define VIBRATOR_MEDIUM_MAGNITUDE 0x5fff
+
+/* 0.7 * (VIBRATOR_STRONG_MAGNITUDE - VIBRATOR_LIGHT_MAGNITUDE)
+   + VIBRATOR_LIGHT_MAGNITUDE */
+
+#define VIBRATOR_MEDIUM_MAGNITUDE 0x6CCC
 #define VIBRATOR_LIGHT_MAGNITUDE 0x3fff
 #define VIBRATOR_CUSTOM_DATA_LEN 3
 #define VIBRATOR_DEV_FS "/dev/lra0"
@@ -486,10 +490,10 @@ static int scale(int amplitude, vibrator_intensity_e intensity)
 
     switch (intensity) {
     case VIBRATION_INTENSITY_LOW:
-        scale_amplitude = amplitude * 0.3;
+        scale_amplitude = amplitude * 0.5;
         break;
     case VIBRATION_INTENSITY_MEDIUM:
-        scale_amplitude = amplitude * 0.6;
+        scale_amplitude = amplitude * 0.7;
         break;
     case VIBRATION_INTENSITY_HIGH:
         scale_amplitude = amplitude * 1;
