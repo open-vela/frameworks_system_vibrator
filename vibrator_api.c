@@ -266,7 +266,7 @@ static void vibrator_uv_read_cb(uv_stream_t* stream, ssize_t nread,
     }
 
     pipe->on_read_pending = 0;
-    VIBRATORINFO("client: read success, nread = %d", nread);
+    VIBRATORINFO("client: read success, nread = %" PRIdPTR, nread);
 }
 
 static void vibrator_uv_connect_cb(uv_connect_t* req, int status)
