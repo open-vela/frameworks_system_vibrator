@@ -464,6 +464,7 @@ static int get_primitive_duration(ff_dev_t* ff_dev, int effect_id,
 
     if (duration != NULL) {
         *duration = data[1] * 1000 + data[2];
+        VIBRATORINFO("effectid = %d *duration = %" PRIu32, effect_id, *duration);
     }
 
     return ret;
@@ -1158,7 +1159,7 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     case VIBRATION_GET_DURATION: {
         ret = get_primitive_duration(ff_dev, msg->effect.effect_id,
             &msg->effect.play_length);
-        VIBRATORINFO("receive get duration = %d", (int)msg->effect.play_length);
+        VIBRATORINFO("receive get duration = %" PRIu32, msg->effect.play_length);
         break;
     }
     case VIBRATION_GET_CAPABLITY: {
