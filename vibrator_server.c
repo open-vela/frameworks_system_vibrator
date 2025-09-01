@@ -309,6 +309,34 @@ static int ff_set_calibvalue(ff_dev_t* ff_dev, uint8_t* data)
 }
 
 /****************************************************************************
+ * Name: ff_control()
+ *
+ * Description:
+ *    Send custom control command to the force feedback device driver.
+ *
+ * Input Parameters:
+ *   ff_dev - structure for operating the ff device driver
+ *   cmd - ioctl command code
+ *   arg - control data send or received
+ *
+ * Returned Value:
+ *   0 means success, otherwise it means failure
+ *
+ ****************************************************************************/
+
+static int ff_control(ff_dev_t* ff_dev, uint32_t cmd, uint8_t* arg)
+{
+    int ret;
+
+    ret = ioctl(ff_dev->fd, cmd, arg);
+    if (ret < 0) {
+        VIBRATORERR("ff device control command failed, errno = %d", errno);
+    }
+
+    return ret;
+}
+
+/****************************************************************************
  * Name: play_effect()
  *
  * Description:
@@ -1173,6 +1201,10 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
     }
     case VIBRATION_SET_CALIBVALUE: {
         ret = ff_set_calibvalue(ff_dev, msg->calibvalue);
+        break;
+    }
+    case VIBRATION_CONTROL: {
+        ret = ff_control(ff_dev, msg->control.cmd, msg->control.data);
         break;
     }
     default: {

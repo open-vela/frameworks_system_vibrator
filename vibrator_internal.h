@@ -39,6 +39,7 @@
 #define VIBRATOR_MSG_HEADER 8
 #define VIBRATOR_MSG_RESULT 4
 #define VIBRATOR_CALIBVALUE_MAX 32
+#define VIBRATOR_CONTROL_DATA_MAX 96
 #define VIBRATION_COMPOSE_MAX 10
 
 #ifdef CONFIG_VIBRATOR_ERROR
@@ -94,6 +95,7 @@ enum {
     VIBRATION_SET_DISABLE,
     VIBRATION_IS_DISABLED,
     VIBRATION_GET_DURATION,
+    VIBRATION_CONTROL,
 };
 
 /* struct vibrator_waveform_t
@@ -133,6 +135,20 @@ typedef struct {
     };
 } aligned_data(4) vibrator_effect_t;
 
+/* struct vibrator_control_t - custom control command for vibrator device
+ *
+ * This structure is used to pass custom control commands from userspace
+ * to the vibrator device driver through the vibrator server.
+ *
+ * @cmd: The ioctl command code that will be sent to the driver
+ * @data: The data buffer containing the control data
+ */
+
+typedef struct {
+    uint32_t cmd;
+    uint8_t data[VIBRATOR_CONTROL_DATA_MAX];
+} aligned_data(4) vibrator_control_t;
+
 /* struct vibrator_msg_t
  * @type: vibrator of type
  * @effect: the vibrator_effect_t of above structure
@@ -160,6 +176,7 @@ typedef struct {
         vibrator_effect_t effect;
         uint8_t calibvalue[VIBRATOR_CALIBVALUE_MAX];
         vibrator_compose_t composition;
+        vibrator_control_t control;
     };
 } aligned_data(4) vibrator_msg_t;
 

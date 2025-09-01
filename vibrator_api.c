@@ -121,6 +121,10 @@ static void vibrator_msg_packet(vibrator_msg_t* buffer)
         buffer->request_len = VIBRATOR_MSG_HEADER + VIBRATOR_CALIBVALUE_MAX;
         buffer->response_len = VIBRATOR_MSG_RESULT;
         break;
+    case VIBRATION_CONTROL:
+        buffer->request_len = VIBRATOR_MSG_HEADER + sizeof(vibrator_control_t);
+        buffer->response_len = VIBRATOR_MSG_RESULT + sizeof(vibrator_control_t);
+        break;
     default:
         VIBRATORERR("unknown message type %d", buffer->type);
         buffer->request_len = sizeof(vibrator_msg_t);
@@ -672,6 +676,33 @@ int vibrator_set_calibvalue(uint8_t* data)
     memcpy(buffer.calibvalue, data, VIBRATOR_CALIBVALUE_MAX);
 
     return vibrator_commit(&buffer);
+}
+
+/**
+ * @brief Send custom control command to the vibrator device driver.
+ *
+ * @param cmd Custom ioctl command code.
+ * @param arg The control data send or received.
+ * @param len The length of the control data.
+ * @return Returns 0 on success, or a negative error code on failure.
+ */
+int vibrator_control(uint32_t cmd, uint8_t* arg, uint32_t len)
+{
+    vibrator_msg_t buffer;
+    int ret;
+
+    if (len > VIBRATOR_CONTROL_DATA_MAX)
+        return -EINVAL;
+
+    buffer.type = VIBRATION_CONTROL;
+    buffer.control.cmd = cmd;
+    memcpy(buffer.control.data, arg, len);
+
+    ret = vibrator_commit(&buffer);
+    if (ret >= 0)
+        memcpy(arg, buffer.control.data, len);
+
+    return ret;
 }
 
 #ifdef CONFIG_VIBRATOR_UV_API
