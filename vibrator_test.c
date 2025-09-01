@@ -96,6 +96,7 @@ enum vibrator_test_apino_e {
     VIBRATOR_TEST_SET_DISABLE,
     VIBRATOR_TEST_IS_DISABLED,
     VIBRATOR_TEST_GETDURATION,
+    VIBRATOR_TEST_CONTROL,
 #ifdef CONFIG_VIBRATOR_UV_API
     VIBRATOR_TEST_LONG_CONNECT
 #endif
@@ -256,6 +257,22 @@ static int test_set_calibvalue(void)
     }
 
     return vibrator_set_calibvalue(value);
+}
+
+static int test_control(void)
+{
+    int ret;
+    uint32_t cmd = 0x1122;
+    uint8_t arg[1] = { 0 };
+
+    ret = vibrator_control(cmd, arg, sizeof(arg));
+    if (ret < 0) {
+        printf("vibrator_control failed: %d\n", ret);
+    } else {
+        printf("vibrator_control success: %d\n", ret);
+    }
+
+    return ret;
 }
 
 static int test_get_primitive_duration(int effectid)
@@ -564,6 +581,14 @@ static int do_vibrator_test(struct vibrator_test_s* test_data)
         ret = test_get_primitive_duration(test_data->effectid);
         if (ret < 0) {
             printf("get_primitive_duration failed: %d\n", ret);
+            return ret;
+        }
+        break;
+    case VIBRATOR_TEST_CONTROL:
+        printf("API TEST: vibrator_control\n");
+        ret = test_control();
+        if (ret < 0) {
+            printf("vibrator_control failed: %d\n", ret);
             return ret;
         }
         break;

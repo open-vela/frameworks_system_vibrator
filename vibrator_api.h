@@ -280,6 +280,16 @@ int vibrator_calibrate(uint8_t* data);
  */
 int vibrator_set_calibvalue(uint8_t* data);
 
+/**
+ * @brief Send custom control command to the vibrator device driver.
+ *
+ * @param cmd Custom ioctl command code.
+ * @param arg The control data send or received.
+ * @param len The length of the control data.
+ * @return Returns 0 on success, or a negative error code on failure.
+ */
+int vibrator_control(uint32_t cmd, uint8_t* arg, uint32_t len);
+
 #ifdef CONFIG_VIBRATOR_UV_API
 /**
  * @brief Asynchronously sends a request to play a predefined vibration effect to
