@@ -44,7 +44,6 @@
  * @loop: the loop of uv
  * @handle: the handle of pipe
  * @connect_req: the connect request of pipe
- * @write_req: the write request of pipe
  * @shutdown_req: the shutdown request of pipe
  * @on_connect: the callback function when connect to vibrator server
  * @on_read: the callback function when read from vibrator server
@@ -57,7 +56,6 @@ typedef struct {
     uv_loop_t* loop;
     uv_pipe_t handle;
     uv_connect_t connect_req;
-    uv_write_t write_req;
     uv_shutdown_t shutdown_req;
     vibrator_uv_callback on_connect;
     vibrator_uv_callback on_read;
@@ -232,6 +230,8 @@ static void vibrator_uv_write_cb(uv_write_t* req, int status)
     if (pipe->on_read == NULL) {
         pipe->on_read_pending = 0;
     }
+
+    free(req);
 }
 
 static void vibrator_uv_alloc_cb(uv_handle_t* handle,
@@ -793,10 +793,11 @@ int vibrator_uv_play_predefined(void* handle, uint8_t effect_id,
     vibrator_effect_strength_e es, vibrator_uv_callback cb)
 {
     vibrator_pipe_t* pipe = uv_handle_get_data((uv_handle_t*)handle);
+    uv_write_t* write_req;
     int ret = 0;
 
     DEBUGASSERT(pipe->loop == uv_default_loop());
-    if (pipe->on_read_pending) {
+    if (pipe->on_read_pending && cb != NULL) {
         VIBRATORERR("err: %d", -EBUSY);
         return -EBUSY;
     }
@@ -813,8 +814,16 @@ int vibrator_uv_play_predefined(void* handle, uint8_t effect_id,
     pipe->on_read = cb;
     uv_buf_t send_buf = uv_buf_init((char*)&pipe->msg, pipe->msg.request_len);
 
-    ret = uv_write(&pipe->write_req, (uv_stream_t*)&pipe->handle, &send_buf, 1, vibrator_uv_write_cb);
+    write_req = malloc(sizeof(uv_write_t));
+    if (write_req == NULL) {
+        VIBRATORERR("malloc fail, err: %d", -ENOMEM);
+        return -ENOMEM;
+    }
+
+    ret = uv_write(write_req, (uv_stream_t*)&pipe->handle, &send_buf, 1, vibrator_uv_write_cb);
+
     if (ret < 0) {
+        free(write_req);
         VIBRATORERR("uv_write fail, uv_errno_name(ret) = %s", uv_err_name(ret));
     }
 
