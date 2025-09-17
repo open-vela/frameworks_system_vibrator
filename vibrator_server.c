@@ -250,6 +250,7 @@ static int ff_set_amplitude(ff_dev_t* ff_dev, uint8_t amplitude)
     }
 
     ff_dev->curr_magnitude = tmp;
+    ff_dev->curr_amplitude = amplitude;
 
     return ret;
 }
@@ -361,14 +362,17 @@ static int play_effect(ff_dev_t* ff_dev, int effect_id,
     switch (es) {
     case VIBRATION_LIGHT: {
         ff_dev->curr_magnitude = VIBRATOR_LIGHT_MAGNITUDE;
+        ff_dev->curr_amplitude = VIBRATOR_MAX_AMPLITUDE * 0.5;
         break;
     }
     case VIBRATION_MEDIUM: {
         ff_dev->curr_magnitude = VIBRATOR_MEDIUM_MAGNITUDE;
+        ff_dev->curr_amplitude = VIBRATOR_MAX_AMPLITUDE * 0.7;
         break;
     }
     case VIBRATION_STRONG: {
         ff_dev->curr_magnitude = VIBRATOR_STRONG_MAGNITUDE;
+        ff_dev->curr_amplitude = VIBRATOR_MAX_AMPLITUDE * 1;
         break;
     }
     default: {
@@ -402,11 +406,9 @@ static int play_effect(ff_dev_t* ff_dev, int effect_id,
 static int play_primitive(ff_dev_t* ff_dev, int effect_id,
     float amplitude, long* play_length_ms)
 {
-    int tmp;
-
-    tmp = (uint8_t)(amplitude * VIBRATOR_MAX_AMPLITUDE);
-    ff_dev->curr_magnitude = tmp * (VIBRATOR_STRONG_MAGNITUDE - VIBRATOR_LIGHT_MAGNITUDE) / 255;
+    ff_dev->curr_magnitude = amplitude * (VIBRATOR_STRONG_MAGNITUDE - VIBRATOR_LIGHT_MAGNITUDE);
     ff_dev->curr_magnitude += VIBRATOR_LIGHT_MAGNITUDE;
+    ff_dev->curr_amplitude = amplitude * VIBRATOR_MAX_AMPLITUDE;
 
     return ff_play(ff_dev, effect_id, VIBRATOR_INVALID_VALUE,
         play_length_ms);
@@ -535,6 +537,42 @@ static int scale(int amplitude, vibrator_intensity_e intensity)
 }
 
 /****************************************************************************
+ * Name: scalef()
+ *
+ * Description:
+ *    scale the amplitude with the given intensity.
+ *
+ * Input Parameters:
+ *   amplitude - vibration amplitude, range 0 - 1
+ *   intensity - vibration intensity
+ *
+ * Returned Value:
+ *   return the scaled vibration amplitude, range 0 - 1
+ *
+ ****************************************************************************/
+
+static float scalef(float amplitude, vibrator_intensity_e intensity)
+{
+    float scale_amplitude;
+
+    switch (intensity) {
+    case VIBRATION_INTENSITY_LOW:
+        scale_amplitude = amplitude * 0.5;
+        break;
+    case VIBRATION_INTENSITY_MEDIUM:
+        scale_amplitude = amplitude * 0.7;
+        break;
+    case VIBRATION_INTENSITY_HIGH:
+        scale_amplitude = amplitude * 1;
+        break;
+    default:
+        scale_amplitude = 1;
+    }
+
+    return scale_amplitude;
+}
+
+/****************************************************************************
  * Name: should_vibrate()
  *
  * Description:
@@ -624,13 +662,10 @@ static int receive_stop(ff_dev_t* ff_dev)
 
 static int receive_start(ff_dev_t* ff_dev, uint32_t timeoutms)
 {
-    int scale_amplitude;
     int ret;
 
     if (!should_vibrate(ff_dev->disabled))
         return -ENOTSUP;
-
-    scale_amplitude = scale(ff_dev->curr_amplitude, ff_dev->intensity);
 
     /* Note: ordering is important here! Many haptic drivers will reset their
        amplitude when enabled, so we always have to enable first, then set
@@ -641,7 +676,7 @@ static int receive_start(ff_dev_t* ff_dev, uint32_t timeoutms)
         VIBRATORERR("Error: ioctl failed, errno = %d", errno);
     }
 
-    return ff_set_amplitude(ff_dev, scale_amplitude);
+    return ff_set_amplitude(ff_dev, ff_dev->curr_amplitude);
 }
 
 /****************************************************************************
@@ -727,12 +762,12 @@ static void compose_timer_cb(uv_timer_t* timer)
     vibrator_compose_t* compose = &thread_args->composition;
     ff_dev_t* ff_dev = thread_args->ff_dev;
     int32_t play_length = 0;
-    uint8_t amplitude;
+    float amplitude;
 
     uv_timer_stop(timer);
 
     VIBRATORINFO("index(count) = %d", compose->index);
-    amplitude = scale(compose->composite_effect[compose->index].scale * VIBRATOR_MAX_AMPLITUDE, ff_dev->intensity);
+    amplitude = scalef(compose->composite_effect[compose->index].scale, ff_dev->intensity);
     VIBRATORINFO("scale %f, primitive %d", compose->composite_effect[compose->index].scale, (int)compose->composite_effect[compose->index].primitive);
     if (amplitude != 0) {
         play_primitive(ff_dev, compose->composite_effect[compose->index].primitive, amplitude, (long*)&play_length);
@@ -995,7 +1030,6 @@ static int receive_is_disabled(ff_dev_t* ff_dev, uint8_t* disable)
 
 static int receive_set_amplitude(ff_dev_t* ff_dev, uint8_t amplitude)
 {
-    ff_dev->curr_amplitude = amplitude;
     return ff_set_amplitude(ff_dev, amplitude);
 }
 
