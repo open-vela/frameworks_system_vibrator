@@ -18,6 +18,7 @@
  * @brief Included Files
  ****************************************************************************/
 
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netpacket/rpmsg.h>
