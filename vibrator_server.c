@@ -1076,7 +1076,7 @@ static int vibrator_init(ff_dev_t* ff_dev)
 
     ff_dev->curr_app_id = VIBRATOR_INVALID_VALUE;
     ff_dev->curr_magnitude = VIBRATOR_STRONG_MAGNITUDE;
-    ff_dev->intensity = VIBRATION_INTENSITY_HIGH;
+    ff_dev->intensity = CONFIG_VIBRATOR_DEFAULT_INTENSITY;
     ff_dev->disabled = VIBRATOR_DEFAULT_DISABLE;
     ff_dev->curr_amplitude = VIBRATOR_MAX_AMPLITUDE;
     ff_dev->capabilities = 0;

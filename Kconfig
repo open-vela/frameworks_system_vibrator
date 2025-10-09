@@ -39,6 +39,11 @@ config VIBRATOR_STACKSIZE
 	int "stack size"
 	default 8192
 
+config VIBRATOR_DEFAULT_INTENSITY
+	int "vibration default intensity"
+	depends on VIBRATOR_SERVER
+	default 2
+
 config VIBRATOR_UV_API
 	bool "add virbator uv api"
 	depends on LIBUV
