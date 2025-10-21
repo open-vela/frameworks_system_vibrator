@@ -24,7 +24,8 @@ cc_library_static {
         "-DCONFIG_VIBRATOR_SERVER_CPUNAME=\"ap\""
     ],
     header_libs: [
-        "nuttx_libc_headers"
+        "nuttx_libc_headers",
+        "kernel_modules_headers",
     ],
     proprietary: true
 }
@@ -33,5 +34,6 @@ cc_binary {
     name: "vibrator_test",
     srcs: ["vibrator_test.c"],
     defaults: ["vibrator_defaults"],
+    static_libs: ["libkvdb_vendor"],
     proprietary: true
 }

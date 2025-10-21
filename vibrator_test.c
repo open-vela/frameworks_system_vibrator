@@ -18,10 +18,13 @@
  * Included Files
  ****************************************************************************/
 
+#include <errno.h>
+#include <inttypes.h>
 #include <kvdb.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #ifdef CONFIG_VIBRATOR_UV_API
 #include <uv.h>
