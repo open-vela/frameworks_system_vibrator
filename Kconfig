@@ -44,6 +44,12 @@ config VIBRATOR_DEFAULT_INTENSITY
 	depends on VIBRATOR_SERVER
 	default 2
 
+config VIBRATOR_STATE_REPORT_LIMIT
+	int "vibrator state report limit, in milliseconds"
+	default 100
+	---help---
+		Publish state when the play length is greater than the limit.
+
 config VIBRATOR_UV_API
 	bool "add virbator uv api"
 	depends on LIBUV

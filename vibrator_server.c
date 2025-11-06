@@ -32,6 +32,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include <system/state.h>
 #include <unistd.h>
 #include <uv.h>
 
@@ -76,6 +77,8 @@ typedef struct {
     int32_t capabilities;
     vibrator_intensity_e intensity;
     uint8_t disabled;
+    int orb_fd;
+    uv_timer_t timer;
 } ff_dev_t;
 
 typedef struct {
@@ -91,6 +94,13 @@ typedef struct vibrator_context_s {
     uv_os_sock_t sock;
     threadargs* thread_args;
 } vibrator_context_t;
+
+/****************************************************************************
+ * Private Function Prototypes
+ ****************************************************************************/
+
+static void vibrator_orb_publish(ff_dev_t* ff_dev, uint8_t is_vibrate,
+    int64_t play_length);
 
 /****************************************************************************
  * Private Functions
@@ -627,6 +637,57 @@ static bool should_repeat(int repeat, uint32_t timings[],
 }
 
 /****************************************************************************
+ * Name: vibrator_state_timer_cb()
+ *
+ * Description:
+ *    callback function to publish vibrator status to orb
+ *
+ * Input Parameters:
+ *   timer - the handle of the uv timer
+ *
+ * Returned Value:
+ *   none
+ *
+ ****************************************************************************/
+
+static void vibrator_state_timer_cb(uv_timer_t* timer)
+{
+    ff_dev_t* ff_dev = timer->data;
+    vibrator_orb_publish(ff_dev, 0, VIBRATOR_INVALID_VALUE);
+}
+
+/****************************************************************************
+ * Name: vibrator_orb_publish()
+ *
+ * Description:
+ *    publish vibrator status to orb
+ *
+ * Input Parameters:
+ *   ff_dev - structure for operating the ff device driver
+ *   is_vibrate - vibration status
+ *   play_length - vibration length
+ *
+ ****************************************************************************/
+
+static void vibrator_orb_publish(ff_dev_t* ff_dev, uint8_t is_vibrate, int64_t play_length)
+{
+    struct vibrator_state state;
+    state.timestamp = orb_absolute_time();
+    state.start = is_vibrate;
+
+    if (is_vibrate && play_length >= 0 && play_length < CONFIG_VIBRATOR_STATE_REPORT_LIMIT) {
+        VIBRATORINFO("play_length < %d, not publish", CONFIG_VIBRATOR_STATE_REPORT_LIMIT);
+        return;
+    }
+
+    orb_publish(ORB_ID(vibrator_state), ff_dev->orb_fd, &state);
+
+    if (play_length > 0) {
+        uv_timer_start(&ff_dev->timer, vibrator_state_timer_cb, play_length, 0);
+    }
+}
+
+/****************************************************************************
  * Name: receive_stop()
  *
  * Description:
@@ -642,6 +703,7 @@ static bool should_repeat(int repeat, uint32_t timings[],
 
 static int receive_stop(ff_dev_t* ff_dev)
 {
+    vibrator_orb_publish(ff_dev, 0, 0);
     return off(ff_dev);
 }
 
@@ -675,6 +737,8 @@ static int receive_start(ff_dev_t* ff_dev, uint32_t timeoutms)
     if (ret < 0) {
         VIBRATORERR("Error: ioctl failed, errno = %d", errno);
     }
+
+    vibrator_orb_publish(ff_dev, 1, timeoutms);
 
     return ff_set_amplitude(ff_dev, ff_dev->curr_amplitude);
 }
@@ -730,6 +794,7 @@ static void waveform_timer_cb(uv_timer_t* timer)
 
 static int receive_waveform(void* args)
 {
+    int64_t play_length = 0;
     threadargs* thread_args = args;
     vibrator_waveform_t* wave = &thread_args->wave;
 
@@ -739,8 +804,19 @@ static int receive_waveform(void* args)
         return -ENOTSUP;
 
     if (!should_repeat(wave->repeat, wave->timings,
-            wave->amplitudes, wave->length))
+            wave->amplitudes, wave->length)) {
         wave->repeat = -1;
+    }
+
+    if (wave->repeat >= 0) {
+        play_length = VIBRATOR_INVALID_VALUE;
+    } else {
+        for (int i = 0; i < wave->length; i++) {
+            play_length += wave->timings[i];
+        }
+    }
+
+    vibrator_orb_publish(thread_args->ff_dev, 1, play_length);
 
     return uv_timer_start(&thread_args->timer, waveform_timer_cb, 0, 0);
 }
@@ -799,6 +875,8 @@ static void compose_timer_cb(uv_timer_t* timer)
 
 static int receive_compose(void* args)
 {
+    int64_t play_length = 0;
+    int32_t duration = 0;
     threadargs* thread_args = args;
     vibrator_compose_t* compose = &thread_args->composition;
 
@@ -806,6 +884,29 @@ static int receive_compose(void* args)
 
     if (!should_vibrate(thread_args->ff_dev->disabled))
         return -ENOTSUP;
+
+    for (int i = 0; i < compose->length; i++) {
+        int ret = get_primitive_duration(thread_args->ff_dev, compose->composite_effect[i].primitive, &duration);
+        if (ret < 0) {
+            VIBRATORERR("get_primitive_duration failed, errno = %d, skip play_length calculation", errno);
+            play_length = VIBRATOR_INVALID_VALUE;
+            break;
+        }
+        play_length += compose->composite_effect[i].delay_ms + duration;
+    }
+
+    if (play_length == 0) {
+        VIBRATORERR("play_length == 0, not play");
+        return -EINVAL;
+    }
+
+    /* means repeat forever, play_length is infinite */
+
+    if (compose->repeat >= 0) {
+        play_length = VIBRATOR_INVALID_VALUE;
+    }
+
+    vibrator_orb_publish(thread_args->ff_dev, 1, play_length);
 
     return uv_timer_start(&thread_args->timer, compose_timer_cb,
         compose->composite_effect[compose->index].delay_ms, 0);
@@ -884,6 +985,8 @@ static int receive_predefined(ff_dev_t* ff_dev, vibrator_effect_t* eff)
     if (ret >= 0)
         eff->play_length = play_length;
 
+    vibrator_orb_publish(ff_dev, 1, play_length);
+
     return ret;
 }
 
@@ -914,6 +1017,8 @@ static int receive_primitive(ff_dev_t* ff_dev, vibrator_effect_t* eff)
 
     if (ret >= 0)
         eff->play_length = play_length;
+
+    vibrator_orb_publish(ff_dev, 1, play_length);
 
     return ret;
 }
@@ -1080,6 +1185,7 @@ static int vibrator_init(ff_dev_t* ff_dev)
     ff_dev->disabled = VIBRATOR_DEFAULT_DISABLE;
     ff_dev->curr_amplitude = VIBRATOR_MAX_AMPLITUDE;
     ff_dev->capabilities = 0;
+    ff_dev->orb_fd = -1;
 
     ff_dev->fd = open(VIBRATOR_DEV_FS, O_CLOEXEC | O_RDWR);
     if (ff_dev->fd < 0) {
@@ -1116,6 +1222,15 @@ static int vibrator_init(ff_dev_t* ff_dev)
     } else {
         ff_set_calibvalue(ff_dev, calib_data);
     }
+
+    ff_dev->orb_fd = orb_advertise(ORB_ID(vibrator_state), NULL);
+    if (ff_dev->orb_fd < 0) {
+        VIBRATORERR("failed to advertise vibrator_state, errno = %d", errno);
+        close(ff_dev->fd);
+        return -errno;
+    }
+
+    vibrator_orb_publish(ff_dev, 0, 0);
     return OK;
 }
 
@@ -1135,7 +1250,6 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
 {
     threadargs* thread_args;
     ff_dev_t* ff_dev;
-    uv_timer_t* timer;
     int ret;
 
     if (args == NULL) {
@@ -1145,50 +1259,47 @@ static int vibrator_mode_select(vibrator_msg_t* msg, void* args)
 
     thread_args = (threadargs*)args;
     ff_dev = thread_args->ff_dev;
-    timer = &thread_args->timer;
+
+    if (msg->type <= VIBRATION_INTERVAL) {
+        uv_timer_stop(&thread_args->timer);
+        uv_timer_stop(&ff_dev->timer);
+    }
 
     switch (msg->type) {
     case VIBRATION_WAVEFORM: {
-        uv_timer_stop(timer);
         thread_args->wave = msg->wave;
         ret = receive_waveform(thread_args);
         VIBRATORINFO("receive waveform ret = %d", ret);
         break;
     }
     case VIBRATION_COMPOSITION: {
-        uv_timer_stop(timer);
         thread_args->composition = msg->composition;
         ret = receive_compose(thread_args);
         VIBRATORINFO("receive compose ret = %d", ret);
         break;
     }
     case VIBRATION_INTERVAL: {
-        uv_timer_stop(timer);
         thread_args->wave = msg->wave;
         ret = receive_interval(thread_args);
         VIBRATORINFO("receive interval ret = %d", ret);
         break;
     }
     case VIBRATION_EFFECT: {
-        uv_timer_stop(timer);
         ret = receive_predefined(ff_dev, &msg->effect);
         VIBRATORINFO("receive predefined ret = %d", ret);
         break;
     }
     case VIBRATION_STOP: {
-        uv_timer_stop(timer);
         ret = receive_stop(ff_dev);
         VIBRATORINFO("receive stop ret = %d", ret);
         break;
     }
     case VIBRATION_START: {
-        uv_timer_stop(timer);
         ret = receive_start(ff_dev, msg->timeoutms);
         VIBRATORINFO("receive start ret = %d", ret);
         break;
     }
     case VIBRATION_PRIMITIVE: {
-        uv_timer_stop(timer);
         ret = receive_primitive(ff_dev, &msg->effect);
         VIBRATORINFO("receive primitive ret = %d", ret);
         break;
@@ -1391,6 +1502,9 @@ int main(int argc, char* argv[])
     }
 
     uv_timer_init(uv_default_loop(), &thread_args.timer);
+
+    ff_dev.timer.data = &ff_dev;
+    uv_timer_init(uv_default_loop(), &ff_dev.timer);
 
     ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
     if (ret < 0) {
